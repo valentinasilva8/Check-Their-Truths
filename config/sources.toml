@@ -1,0 +1,47 @@
+# Official statements for the Trump-Xi meeting in Washington, Sept 23-25, 2026.
+# Verified Oct 5, 2026: us_fact_sheet, china_mfa_english, and china_govcn_mirror
+# returned HTTP 200 with the expected content from Cloud Run (europe-west1).
+
+[meetings.washington_2026_09]
+name = "Xi Jinping state visit to the United States"
+dates = "2026-09-23 to 2026-09-25"
+
+[[meetings.washington_2026_09.sources]]
+name = "us_fact_sheet"
+side = "us"
+language = "en"
+url = "https://www.whitehouse.gov/fact-sheets/2026/09/fact-sheet-president-donald-j-trump-advances-a-fair-and-reciprocal-relationship-with-china-while-hosting-historic-state-visit/"
+marker = "super intelligence"
+priority = 1
+
+[[meetings.washington_2026_09.sources]]
+name = "china_mfa_english"
+side = "china"
+language = "en"
+url = "https://www.fmprc.gov.cn/eng/xw/zyxw/202609/t20260926_12031663.html"
+marker = "Eight Deliverables"
+priority = 1
+
+[[meetings.washington_2026_09.sources]]
+name = "china_govcn_mirror"
+side = "china"
+language = "en"
+url = "https://english.www.gov.cn/news/202609/26/content_WS6ab7d2bcc6d00ca5f9a0d7d1.html"
+marker = "eight deliverables"
+priority = 2
+
+[[meetings.washington_2026_09.sources]]
+name = "china_embassy_mirror"
+side = "china"
+language = "en"
+url = "https://us.china-embassy.gov.cn/eng/zgyw/202609/t20260926_12031663.htm"
+marker = "Eight Deliverables"
+priority = 3
+
+[[meetings.washington_2026_09.sources]]
+name = "china_mfa_chinese_original"
+side = "china"
+language = "zh"
+url = "https://www.mfa.gov.cn/zyxw/202609/t20260926_12031616.shtml"
+markers = ["人工智能", "超级智能"]
+role = "term_check_only"
