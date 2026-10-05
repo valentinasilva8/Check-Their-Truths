@@ -102,7 +102,7 @@ A running log of every project decision, so we can refer back to why things are 
 
 ### D-12: Comparison consistency
 - **Date:** 2026-10-05
-- **Decision:** The comparison model call uses temperature 0, and results are cached per meeting (keyed by meeting_id and a hash of the source texts).
+- **Decision:** The comparison model call uses temperature 0, and results are cached per meeting (keyed by meeting_id, topic normalized to lowercase with empty string for no topic, and a sha256 hash of both source texts).
 - **Why:** Temperature 0 gives deterministic output. Caching means every user sees the same table and avoids redundant model calls.
 - **Alternatives rejected:** No caching (each request would re-run the model call and potentially produce slightly different results).
 - **Status:** Active

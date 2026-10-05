@@ -41,11 +41,11 @@ Python, FastAPI, LiteLLM, Gemini via Vertex AI. Google Cloud Run service gemini-
 ## Tools
 1. list_meetings: supported meetings from config, with dates and available sources.
 2. get_official_statement(meeting_id, side): side is "us" or "china". For China, try MFA English, then the gov.cn mirror, then the Embassy mirror. If all fail, use the saved snapshot in data/snapshots/ and say so with its retrieval date. Return paragraphs, source URL, retrieved_at, and whether the text is live or a snapshot.
-3. compare_statements(meeting_id, topic optional): ORIGINAL. Returns rows labeled both, only_us, only_china, or contradiction, each with verbatim quotes and source links. Any row whose quote fails verification is dropped and reported, never shown.
-4. track_commitments(meeting_id): ORIGINAL. Lists dated promises with honest statuses based on today's date: upcoming, deadline passed (not verified), or no date given. Never claims a promise was kept or broken without evidence.
+3. compare_statements(meeting_id, topic optional): ORIGINAL. Returns rows labeled same, different_framing, contradiction, only_us, or only_china. Each row has a one-sentence reason. The model assigns labels; code verifies quotes. For the AI topic, also reports whether the Chinese original contains 人工智能 and/or 超级智能 (exact text match). Unverifiable rows are dropped and the count is reported to the user. Uses temperature 0; results are cached per (meeting_id, normalized topic, hash of both source texts).
+4. track_commitments(meeting_id): ORIGINAL. Lists dated promises with honest statuses based on today's date in America/New_York: upcoming, deadline passed (not verified), or no date given. Never claims a promise was kept or broken without evidence.
 
 ## Quote verification rules
-Before comparing, normalize whitespace, curly vs straight quotes, and non-breaking spaces. A quote passes only if it is an exact substring of one paragraph from the cited source after normalization.
+Before comparing, normalize whitespace, curly vs straight quotes, and non-breaking spaces. A quote passes only if it is an exact substring of one paragraph from the cited source after normalization, and is at least 6 words long.
 
 ## Translation honesty
 China quotes come from China's own official English release, never our translation. Label them "Official English text, China Ministry of Foreign Affairs" and link the Chinese original. The only Chinese-language check is an exact text match for specific terms (for example 人工智能 vs 超级智能).
