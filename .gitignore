@@ -11,3 +11,8 @@ config/secrets.toml
 
 # macOS
 .DS_Store
+
+# Local scratch files
+.Rhistory
+DESIGN.html
+spikes/
