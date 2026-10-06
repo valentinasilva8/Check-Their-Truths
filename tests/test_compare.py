@@ -109,6 +109,28 @@ def test_compare_drops_bad_quote(monkeypatch):
     assert len(result["drop_reasons"]) == 2
 
 
+def test_verify_quote_longer_than_80_chars():
+    """A valid quote longer than 80 chars passes verification on its full text.
+
+    The drop_reason message appends right_quote[:80] for display, but _verify_quote
+    always receives the full string. This test confirms that: a quote > 80 chars that
+    IS a verbatim substring of the paragraph passes without truncation.
+    """
+    snap = load_snapshot("washington_2026_09", "china_mfa_english")
+    assert snap, "china_mfa_english snapshot missing"
+    long_para = next((p for p in snap["paragraphs"] if len(p) > 90), None)
+    assert long_para is not None, "Expected at least one China MFA paragraph > 90 chars"
+
+    # Take a 85-char interior slice so the quote does not start at position 0
+    # (ensures the first 80 chars alone is not trivially the full match).
+    quote = long_para[5:90]  # 85 chars, starting mid-paragraph
+    assert len(quote) > 80
+    assert len(quote.split()) >= 6
+    assert quote in long_para, "Test setup error: slice must be a substring"
+
+    assert _verify_quote(quote, [long_para]) is True
+
+
 def test_compare_drops_short_quote(monkeypatch):
     config = load_config()
     snap = load_snapshot("washington_2026_09", "us_fact_sheet")

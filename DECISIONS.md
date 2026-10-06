@@ -40,6 +40,10 @@ A running log of every project decision, so we can refer back to why things are 
 | D-34 | 2026-10-05 | approximately thresholds: 5% supported, 25% imprecise, >25% contradicted; denominator is claimed value | Active |
 | D-35 | 2026-10-05 | Claims reference a named post; claimed_phrase verified as substring; C3 cross-checks CMS stated vs computed change | Active |
 | D-36 | 2026-10-05 | AI naming is different_framing; contradiction requires explicit incompatible claims from both sides | Active |
+| D-37 | 2026-10-05 | Pairing rule: a row may only pair quotes about the same specific item or commitment | Active |
+| D-38 | 2026-10-05 | C1 supported: noun differences (enrollees vs Seniors) are outside the at_least rule | Active |
+| D-39 | 2026-10-05 | context_note format: fixed lead-in "CMS also states:" + verbatim verified CMS sentence; model never writes it | Active |
+| D-40 | 2026-10-05 | Claim cards show source name plainly with link; no editorial notes | Active |
 
 ---
 
@@ -286,6 +290,34 @@ A running log of every project decision, so we can refer back to why things are 
 - **Decision:** The AI naming row for washington_2026_09 is labeled "different_framing", not "contradiction". The US statement says both leaders agreed to use "super intelligence"; China's English statement says nothing about terminology and uses "AI" throughout. That is omission plus different wording, not an explicit incompatible claim. "contradiction" in compare_statements is reserved for cases where both sides make explicit factual claims that cannot both be true (see D-25). check_claim's "contradicted" verdict (Medicare C3) is separate and follows D-31/D-33; that verdict is mechanically derived from numbers, not from the label set here.
 - **Why:** Calling the AI naming row a contradiction would imply China's text denies the US claim. It does not -- China's text simply uses "AI" without addressing the terminology question.
 - **Alternatives rejected:** contradiction label (misrepresents China's text as a denial); ignoring the naming difference (would hide the most newsworthy divergence in the statements).
+- **Status:** Active
+
+### D-37: Pairing rule added to compare_statements prompt
+- **Date:** 2026-10-05
+- **Decision:** The compare_statements prompt includes a pairing rule: a row may only pair two quotes that address the same specific item or commitment. If each side mentions a different item under the same broad topic, the model must return separate only_{left} and only_{right} rows instead of a single different_framing row. This rule is part of the prompt text and enforced at PROMPT_VERSION="3".
+- **Why:** Without this rule, broad topics (e.g., "military") caused the model to pair unrelated items as different_framing -- for example, the US Indo-Pacific line paired with China's MOU on crisis communication. That pairing is wrong: the two quotes are about different commitments, not different framings of the same commitment.
+- **Alternatives rejected:** Post-hoc heuristic to split paired rows (too fragile; depends on quote content); keeping v2 prompt (eval confirmed the broad-military eval row fails without this rule).
+- **Status:** Active
+
+### D-38: C1 noun difference is outside the at_least rule
+- **Date:** 2026-10-05
+- **Decision:** C1 verdict is "supported". The at_least rule compares numbers only. The WH fact sheet says "more than 20 million enrollees"; the post says "over 20 MILLION wonderful Seniors". "Enrollees" and "Seniors" are different nouns. This difference is not evaluated by the at_least rule; the number (20,000,000) meets or exceeds the claimed value (20,000,000).
+- **Why:** The rule is about the numerical claim, not the descriptive noun. The WH itself titles the section "IMPROVING MEDICARE FOR SENIORS", making clear the enrollees referred to are seniors. Expanding the rule to check noun alignment would require natural-language judgment that belongs in the model's response, not in the arithmetic rule.
+- **Alternatives rejected:** Returning not_checkable when nouns differ (overcomplicates the rule; the numerical check is what the tool is for); ignoring the noun difference in the result (it is noted in the reason field).
+- **Status:** Active
+
+### D-39: context_note format: fixed lead-in plus verbatim verified CMS sentence
+- **Date:** 2026-10-05
+- **Decision:** The context_note field in check_claim results uses a fixed lead-in ("CMS also states:") followed by the verbatim sentence from the source containing the context_note_check anchor. The sentence is extracted by code (splitting on sentence boundaries in the paragraph), verified as an exact substring of the source (same rules as comparison quotes), and concatenated with the lead-in. The model never writes or summarizes the context_note text. If the anchor is not found in the source, context_note is null and the reason includes "sentence not found in source".
+- **Why:** A code-generated context_note from a verified source sentence cannot contain invented or misquoted text. Requiring the model to write the context_note would risk paraphrase and introduce a second model call with unverifiable output.
+- **Alternatives rejected:** Model-written context_note (unverifiable; paraphrase risk); no context_note for C3 (users would see only "contradicted" with no nuance about the administration's framing of the increase).
+- **Status:** Active
+
+### D-40: Claim cards show source name plainly with link; no editorial notes
+- **Date:** 2026-10-05
+- **Decision:** The UI shows the source citation on claim cards as plain text with a link, for example "Checked against: White House fact sheet, Oct 2, 2026 [link]". No editorial notes (e.g., "published by the administration" or "as reported by CMS") are added. The source is described by its name and date only.
+- **Why:** Editorial notes are subjective and can introduce bias. The user can follow the link and assess the source. The tool's job is to report what the source says, not to editorialize about who published it.
+- **Alternatives rejected:** Adding editorial context to the source citation (introduces bias; violates the neutrality rule in CLAUDE.md); omitting the source link (users could not verify the claim).
 - **Status:** Active
 
 ### D-35: Post reference, claimed_phrase verification, and C3 cross-check

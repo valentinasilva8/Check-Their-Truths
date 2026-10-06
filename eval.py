@@ -82,13 +82,19 @@ EVAL_ROWS = [
         "washington_2026_09", "military", "us", "china",
         [
             (
-                # With a broad topic both sides have military content, so the model may
-                # produce different_framing rather than only_china. The MOU quote should
-                # appear in either case.
-                "MOU quote present in military rows (any label)",
+                "MOU row is only_china (pairing rule prevents different_framing with unrelated US item)",
                 lambda rows: any(
-                    "memorandum" in (r.get("right_quote") or "").lower()
-                    for r in rows if r.get("label") != "term_check"
+                    r["label"] == "only_china"
+                    and "memorandum" in (r.get("right_quote") or "").lower()
+                    for r in rows
+                ),
+            ),
+            (
+                "No different_framing row pairs unrelated item with MOU",
+                lambda rows: not any(
+                    r["label"] == "different_framing"
+                    and "memorandum" in (r.get("right_quote") or "").lower()
+                    for r in rows
                 ),
             ),
         ],

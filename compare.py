@@ -8,7 +8,7 @@ import litellm
 
 from sources import get_official_source, load_snapshot
 
-PROMPT_VERSION = "2"
+PROMPT_VERSION = "3"
 
 MAX_ROWS = 12
 
@@ -110,7 +110,11 @@ def _build_prompt(
         "Different terms for the same concept, differences in emphasis, and one side not "
         'mentioning something are NEVER contradiction. Use "different_framing" when both '
         'sides address a topic but with different language or focus. Use "only_{left}" or '
-        '"only_{right}" when only one side mentions the topic.'
+        '"only_{right}" when only one side mentions the topic.\n\n'
+        "PAIRING RULE: A row may only pair two quotes that address the same specific item "
+        "or commitment. If each side mentions a different item under the same broad topic, "
+        f'return separate "only_{left}" and "only_{right}" rows instead of a single '
+        '"different_framing" row.'
     )
 
 
