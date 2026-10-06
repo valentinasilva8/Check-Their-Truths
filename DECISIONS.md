@@ -38,6 +38,7 @@ A running log of every project decision, so we can refer back to why things are 
 | D-32 | 2026-10-05 | Press rows carry attributed_to (named person or null for outlet's own reporting) | Active |
 | D-33 | 2026-10-05 | check_claim verdicts: supported, imprecise, contradicted, not_checkable; context_note for other reasonable readings | Active |
 | D-34 | 2026-10-05 | approximately thresholds: 5% supported, 25% imprecise, >25% contradicted; denominator is claimed value | Active |
+| D-35 | 2026-10-05 | Claims reference a named post; claimed_phrase verified as substring; C3 cross-checks CMS stated vs computed change | Active |
 
 ---
 
@@ -277,4 +278,11 @@ A running log of every project decision, so we can refer back to why things are 
 - **Decision:** The approximately rule uses the claimed value as the denominator. Thresholds: difference <= 5% of claimed value is supported; <= 25% is imprecise; > 25% is contradicted. A difference of exactly 5% is supported; exactly 25% is imprecise. These thresholds are shown on the claim card in the UI.
 - **Why:** Using the claimed value as denominator measures how far off the claim is from its own stated number, which is the natural reading. Displaying the thresholds lets users see why the verdict was assigned without having to read the code.
 - **Alternatives rejected:** Official value as denominator (measures how far the official is from the claim, which is harder to interpret); hiding thresholds from the UI (users cannot verify the verdict without them).
+- **Status:** Active
+
+### D-35: Post reference, claimed_phrase verification, and C3 cross-check
+- **Date:** 2026-10-05
+- **Decision:** Each claim in claims.toml references a named post by ID. Before applying any rule, code verifies that `claimed_phrase` is an exact substring of the post's `verbatim_text`. If not, verdict is `not_checkable` with reason "claimed_phrase not found in post text". For C3 (direction), code additionally extracts the increase amount CMS explicitly states in `anchor_after` using `regex_stated_change`, then verifies it matches the computed difference (after - before). If they differ, verdict is `not_checkable` with reason "stated and computed changes do not match". Phase M tests include: `test_claimed_phrase_not_in_post` (not_checkable), `test_c3_cross_check_mismatch` (not_checkable). Phase M test `test_c3_contradicted` checks for fields 2025_premium, 2026_premium, monthly_change, pct_change, annual_change (annual_net_of_payment is not returned).
+- **Why:** Verifying claimed_phrase keeps the connection between the claim and its source text explicit and machine-checkable. The C3 cross-check catches the case where the CMS page is updated with corrected figures that no longer match the stored anchor sentence.
+- **Alternatives rejected:** Trusting the claimed_phrase without checking (would silently pass claims whose source text was edited); skipping the cross-check (would not catch CMS page changes that affect the arithmetic).
 - **Status:** Active
