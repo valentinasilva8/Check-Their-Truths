@@ -6,7 +6,7 @@ from pathlib import Path
 
 import tomllib
 
-from sources import fetch_source_by_name
+from sources import fetch_source_by_name, normalize_text as _normalize
 
 _HERE = Path(__file__).parent
 CLAIMS_PATH = _HERE / "config" / "claims.toml"
@@ -20,14 +20,6 @@ def load_claims(path: Path = CLAIMS_PATH) -> dict:
 # ---------------------------------------------------------------------------
 # Text utilities
 # ---------------------------------------------------------------------------
-
-def _normalize(text: str) -> str:
-    """Normalize whitespace, curly quotes, and non-breaking spaces."""
-    text = text.replace("‘", "'").replace("’", "'")
-    text = text.replace("“", '"').replace("”", '"')
-    text = text.replace(" ", " ")
-    return re.sub(r"\s+", " ", text).strip()
-
 
 def _find_paragraph(anchor: str, paragraphs: list[str]) -> str | None:
     """Return the first paragraph containing anchor text after normalization."""
@@ -86,15 +78,20 @@ def _parse_number(text: str) -> Decimal | None:
 def _extract_number(
     anchor: str, regex: str, paragraphs: list[str]
 ) -> tuple[Decimal | None, str | None]:
-    """Find anchor paragraph and extract a number via regex.
+    """Find anchor paragraph, scope to the sentence containing anchor, extract number.
 
     Returns (number, paragraph). Returns (None, None) when anchor is not found.
     Returns (None, paragraph) when anchor is found but regex does not match.
+    Scoping to the sentence prevents regexes from matching numbers in adjacent
+    sentences of the same paragraph (D-41).
     """
     para = _find_paragraph(anchor, paragraphs)
     if para is None:
         return None, None
-    m = re.search(regex, _normalize(para))
+    sentence = _extract_sentence(anchor, para)
+    if sentence is None:
+        return None, para
+    m = re.search(regex, _normalize(sentence))
     if m:
         return _parse_number(m.group(1)), para
     return None, para
@@ -261,6 +258,7 @@ def _run_approximately(
             else "number not found via regex in source paragraph",
         )
 
+    official = official.quantize(Decimal("0.01"))
     verdict, pct = verdict_approximately(official, claimed_value)
     threshold_desc = (
         "<= 5% -> supported"
@@ -442,9 +440,18 @@ def check_claim(config: dict, claims: dict, case_id: str, claim_id: str) -> dict
 
     checks = claim.get("checks", {})
     source_name = checks.get("source")
-    source_result = fetch_source_by_name(config, case_id, source_name)
+    anchor = checks.get("anchor", "")
+    required_anchors = [anchor] if anchor else None
+    source_result = fetch_source_by_name(
+        config, case_id, source_name, required_anchors=required_anchors
+    )
     if "error" in source_result:
         return {"error": f"Could not fetch source '{source_name}': {source_result['error']}"}
+    if source_result.get("anchor_missing"):
+        return _not_checkable(
+            case_id, claim_id, claimed_phrase, post_info, claim_type,
+            "anchor not found in live page or snapshot",
+        )
 
     paragraphs = source_result["paragraphs"]
     source_url = source_result.get("url", "")

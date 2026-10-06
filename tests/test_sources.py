@@ -13,6 +13,7 @@ from sources import (
     get_sources_for_side,
     load_config,
     load_snapshot,
+    normalize_text,
 )
 
 FIXTURES = Path(__file__).parent / "fixtures"
@@ -186,3 +187,23 @@ def test_empty_url_refused():
     config = load_config()
     with pytest.raises(ValueError, match="URL not in config"):
         fetch_source("", config)
+
+
+# ---------------------------------------------------------------------------
+# normalize_text: shared normalization utility
+# ---------------------------------------------------------------------------
+
+def test_normalize_text_collapses_whitespace():
+    assert normalize_text("  hello   world  ") == "hello world"
+
+
+def test_normalize_text_nbsp_becomes_space():
+    assert normalize_text("hello\xa0world") == "hello world"
+
+
+def test_normalize_text_curly_single_quotes():
+    assert normalize_text("‘hello’") == "'hello'"
+
+
+def test_normalize_text_curly_double_quotes():
+    assert normalize_text("“hello”") == '"hello"'

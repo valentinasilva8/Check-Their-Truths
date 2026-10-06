@@ -1,6 +1,7 @@
 """Config loading, URL fetching, HTML extraction, snapshot I/O, and live-first statement loader."""
 
 import json
+import re
 import sys
 import tomllib
 from datetime import datetime
@@ -251,23 +252,117 @@ def load_snapshot(case_id: str, source_name: str) -> dict | None:
 
 
 # ---------------------------------------------------------------------------
+# Internal fetch helpers (D-43: one fetcher for all sources)
+# ---------------------------------------------------------------------------
+
+def normalize_text(text: str) -> str:
+    """Normalize whitespace, curly quotes, and non-breaking spaces."""
+    text = text.replace("’", "'").replace("‘", "'")
+    text = text.replace("”", '"').replace("“", '"')
+    text = text.replace(" ", " ")
+    return re.sub(r"\s+", " ", text).strip()
+
+
+def _anchors_present(anchors: list[str], paragraphs: list[str]) -> bool:
+    """True when every anchor appears in at least one paragraph after normalization."""
+    for anchor in anchors:
+        norm = normalize_text(anchor)
+        if not any(norm in normalize_text(p) for p in paragraphs):
+            return False
+    return True
+
+
+def _try_live(
+    config: dict,
+    source: dict,
+    required_anchors: list[str] | None = None,
+) -> tuple[dict | None, bool]:
+    """Attempt a single live fetch.
+
+    Returns (result_dict, live_changed).
+    result_dict is None on any failure. live_changed is True when the server
+    returned HTTP 200 but a validity check failed (marker absent, no paragraphs
+    extracted, or a required anchor missing).
+    """
+    url = source["url"]
+    marker = source.get("marker", "")
+    lang = source.get("language", "en")
+    source_name = source["name"]
+
+    if not url.startswith("http") or marker == "TODO":
+        return None, False
+
+    try:
+        resp = fetch_source(url, config)
+    except (requests.RequestException, ValueError):
+        return None, False
+
+    if resp.status_code != 200:
+        return None, False
+
+    # Decode as UTF-8 for marker checks; requests sometimes mis-detects charset.
+    decoded = resp.content.decode("utf-8", errors="replace")
+    if marker and marker.lower() not in decoded.lower():
+        return None, True  # 200 but page looks different
+
+    paragraphs = extract_paragraphs(resp.content, source_name, lang)
+    if not paragraphs:
+        return None, True  # 200, marker present, but no content extracted
+
+    if required_anchors and not _anchors_present(required_anchors, paragraphs):
+        return None, True  # 200, marker present, but required anchor absent
+
+    return {
+        "source_name": source_name,
+        "url": url,
+        "retrieved_at": datetime.now(NY_TZ).isoformat(),
+        "live": True,
+        "live_changed": False,
+        "language": lang,
+        "paragraphs": paragraphs,
+    }, False
+
+
+def _try_snapshot(
+    case_id: str,
+    source_name: str,
+    required_anchors: list[str] | None = None,
+) -> tuple[dict | None, bool]:
+    """Load a snapshot for one source.
+
+    Returns (result_dict, anchor_missing).
+    result_dict is None when the snapshot file does not exist.
+    anchor_missing is True when the snapshot exists but lacks a required anchor.
+    """
+    snap = load_snapshot(case_id, source_name)
+    if snap is None:
+        return None, False
+
+    paragraphs = snap["paragraphs"]
+    if required_anchors and not _anchors_present(required_anchors, paragraphs):
+        return None, True  # snapshot present but anchor not in it
+
+    return {
+        "source_name": source_name,
+        "url": snap.get("url", ""),
+        "retrieved_at": snap.get("retrieved_at", ""),
+        "live": False,
+        "live_changed": False,
+        "language": snap.get("language", "en"),
+        "paragraphs": paragraphs,
+    }, False
+
+
+# ---------------------------------------------------------------------------
 # Live-first statement loader
 # ---------------------------------------------------------------------------
 
 def get_official_source(config: dict, case_id: str, side: str) -> dict:
     """Return the best available statement for one side of a meeting case.
 
-    Tries sources in priority order. A source is accepted as live only when:
-      - HTTP 200
-      - marker string found in the response body
-      - at least one paragraph extracted
-
-    If a live source returns HTTP 200 but the marker is absent, the page may
-    have changed since the snapshot was taken. Falls back to snapshots in the
-    same priority order. Sets live_changed=True when that path was taken so
-    the caller can surface "live page changed or unavailable; showing snapshot".
-
-    Returns an error dict if nothing is available.
+    Tries live sources in priority order first, then snapshot fallback in the
+    same order. Sets live_changed=True if any live source returned 200 but
+    failed a validity check.
     """
     try:
         sources = get_sources_for_side(config, case_id, side)
@@ -276,47 +371,19 @@ def get_official_source(config: dict, case_id: str, side: str) -> dict:
 
     any_live_changed = False
 
-    # Live pass
+    # Live pass: try every source before falling back
     for source in sources:
-        try:
-            resp = fetch_source(source["url"], config)
-        except (requests.RequestException, ValueError):
-            continue
-        if resp.status_code != 200:
-            continue
-        # Decode as UTF-8 for marker checks; requests sometimes mis-detects
-        # the charset of Chinese pages as ISO-8859-1.
-        decoded = resp.content.decode("utf-8", errors="replace")
-        marker = source.get("marker", "")
-        if marker and marker.lower() not in decoded.lower():
+        result, changed = _try_live(config, source)
+        if result:
+            return {**result, "case_id": case_id, "side": side}
+        if changed:
             any_live_changed = True
-            continue
-        lang = source.get("language", "en")
-        paragraphs = extract_paragraphs(resp.content, source["name"], lang)
-        if not paragraphs:
-            continue
-        return {
-            "case_id": case_id,
-            "side": side,
-            "source_name": source["name"],
-            "url": source["url"],
-            "retrieved_at": datetime.now(NY_TZ).isoformat(),
-            "live": True,
-            "language": lang,
-            "paragraphs": paragraphs,
-        }
 
-    # Snapshot fallback in same priority order
+    # Snapshot pass in same priority order
     for source in sources:
-        snap = load_snapshot(case_id, source["name"])
+        snap, _ = _try_snapshot(case_id, source["name"])
         if snap:
-            result = {
-                "case_id": case_id,
-                "side": side,
-                "source_name": source["name"],
-                "live": False,
-                **snap,
-            }
+            result = {**snap, "case_id": case_id, "side": side}
             if any_live_changed:
                 result["live_changed"] = True
                 result["live_changed_note"] = "live page changed or unavailable; showing snapshot"
@@ -334,11 +401,19 @@ def get_official_source(config: dict, case_id: str, side: str) -> dict:
 # Claim-check source loader (fetch by name, not by side)
 # ---------------------------------------------------------------------------
 
-def fetch_source_by_name(config: dict, case_id: str, source_name: str) -> dict:
-    """Fetch a named source for any case type. Live-first with snapshot fallback.
+def fetch_source_by_name(
+    config: dict,
+    case_id: str,
+    source_name: str,
+    required_anchors: list[str] | None = None,
+) -> dict:
+    """Fetch a named source. Live-first with snapshot fallback.
+
+    required_anchors: list of anchor strings that must appear in the fetched
+    content. A live page that lacks any anchor falls back to snapshot.
+    If the snapshot also lacks an anchor, returns {"anchor_missing": True, ...}.
 
     Used by check_claim where sources are identified by name rather than by side.
-    Returns an error dict if the source cannot be found in config or fetched/loaded.
     """
     case = config["cases"].get(case_id)
     if not case:
@@ -351,49 +426,22 @@ def fetch_source_by_name(config: dict, case_id: str, source_name: str) -> dict:
     if source is None:
         return {"error": f"Source '{source_name}' not found in case '{case_id}'."}
 
-    url = source["url"]
-    marker = source.get("marker", "")
-    lang = source.get("language", "en")
-    any_live_changed = False
+    live_result, live_changed = _try_live(config, source, required_anchors)
+    if live_result:
+        return live_result
 
-    if url.startswith("http") and marker != "TODO":
-        try:
-            resp = fetch_source(url, config)
-        except (requests.RequestException, ValueError):
-            resp = None
+    snap_result, anchor_missing = _try_snapshot(case_id, source_name, required_anchors)
+    if snap_result:
+        if live_changed:
+            snap_result["live_changed"] = True
+            snap_result["live_changed_note"] = "live page changed or unavailable; showing snapshot"
+        return snap_result
 
-        if resp is not None and resp.status_code == 200:
-            decoded = resp.content.decode("utf-8", errors="replace")
-            if marker and marker not in decoded:
-                any_live_changed = True
-            else:
-                paragraphs = extract_paragraphs(resp.content, source_name, lang)
-                if paragraphs:
-                    return {
-                        "source_name": source_name,
-                        "url": url,
-                        "retrieved_at": datetime.now(NY_TZ).isoformat(),
-                        "live": True,
-                        "live_changed": False,
-                        "language": lang,
-                        "paragraphs": paragraphs,
-                    }
-                any_live_changed = True
-
-    snap = load_snapshot(case_id, source_name)
-    if snap:
-        result = {
-            "source_name": source_name,
-            "url": snap.get("url", url),
-            "retrieved_at": snap.get("retrieved_at", ""),
-            "live": False,
-            "live_changed": any_live_changed,
-            "language": snap.get("language", lang),
-            "paragraphs": snap["paragraphs"],
+    if anchor_missing:
+        return {
+            "anchor_missing": True,
+            "reason": "anchor not found in live page or snapshot",
         }
-        if any_live_changed:
-            result["live_changed_note"] = "live page changed or unavailable; showing snapshot"
-        return result
 
     return {
         "error": (

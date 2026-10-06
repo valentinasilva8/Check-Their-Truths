@@ -44,10 +44,11 @@ claimed_phrase = "over 20 MILLION wonderful Seniors"
 
 [claims.medicare_checks_2026_10.C1.checks]
 source = "wh_medicare_fact_sheet"
-anchor = "one-time payments of $90 per person to help more than 20 million enrollees"
+# Number-free anchor (D-41): locates the sentence; regex extracts the number from that sentence only.
+anchor = "announced that the federal government will be making one-time payments of"
 # Captures "20 million" as a number-word string; claim_check.py converts to 20000000.
 regex = "more than ([\\d,]+ million) enrollees"
-label = "senior_enrollment_count"
+label = "enrollee_count"
 claimed_value = 20000000
 unit = "count"
 
@@ -63,10 +64,11 @@ claimed_phrase = "nearly $100"
 
 [claims.medicare_checks_2026_10.C2.checks]
 source = "wh_medicare_fact_sheet"
-anchor = "one-time payments of $90 per person to help more than 20 million enrollees"
+# Number-free anchor (D-41): same sentence as C1; regex extracts payment amount only.
+anchor = "announced that the federal government will be making one-time payments of"
 # Captures "90" from "payments of $90 per person".
 regex = "payments of \\$([\\d,]+) per person"
-label = "payment_per_senior_usd"
+label = "payment_per_person_usd"
 claimed_value = "100.00"
 unit = "USD"
 
@@ -82,10 +84,9 @@ claimed_phrase = "which we have already reduced by significant amounts"
 
 [claims.medicare_checks_2026_10.C3.checks]
 source = "cms_2026_premiums"
-# CMS paragraph: "The standard monthly premium for Medicare Part B enrollees will be
-# $202.90 for 2026, an increase of $17.90 from $185.00 in 2025."
-# All three regexes extract from this single sentence.
-anchor = "will be $202.90 for 2026, an increase of $17.90 from $185.00"
+# Number-free anchor (D-41): locates sentence 2 of CMS para [19]. All three regexes
+# run on that sentence only, so they cannot match the deductible numbers in sentence 3.
+anchor = "The standard monthly premium for Medicare Part B enrollees will be"
 # Captures "185.00" -- the 2025 premium (the "before" value).
 regex_before = "from \\$([\\d.]+) in 2025"
 # Captures "202.90" -- the 2026 premium (the "after" value).
@@ -99,8 +100,6 @@ unit = "USD"
 
 [claims.medicare_checks_2026_10.C3.context_note_check]
 source = "cms_2026_premiums"
-# CMS paragraph [20]: "If the Trump Administration had not taken action to address
-# unprecedented spending on skin substitutes, the Part B premium increase would have
-# been about $11 more a month. However, due to changes..."
-# The anchor identifies the sentence that provides nuance for the direction verdict.
-anchor = "the Part B premium increase would have been about $11 more a month"
+# Number-free anchor (D-41): locates the sentence in CMS para [20] that provides
+# nuance for the direction verdict. Regex runs on that sentence only.
+anchor = "had not taken action to address unprecedented spending on skin substitutes"

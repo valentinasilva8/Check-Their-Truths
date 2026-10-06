@@ -81,5 +81,5 @@ side = "us"
 language = "en"
 url = "https://www.cms.gov/newsroom/fact-sheets/2026-medicare-parts-b-premiums-deductibles"
 selector = "div.field--name-body"
-marker = "$202.90"
+marker = "Medicare Part B Premium and Deductible"
 priority = 1

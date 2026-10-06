@@ -190,10 +190,17 @@ def test_c2_imprecise():
     result = check_claim(config, claims, "medicare_checks_2026_10", "C2")
 
     assert result["verdict"] == "imprecise"
-    assert result["numbers"]["official"] == "90"
+    assert result["numbers"]["official"] == "90.00"
     assert result["numbers"]["claimed"] == "100.00"
     assert result["numbers"]["pct_diff"] == "10.0%"
     assert result["context_note"] is None
+
+
+def test_c2_official_has_two_decimals():
+    config = _config()
+    claims = _claims()
+    result = check_claim(config, claims, "medicare_checks_2026_10", "C2")
+    assert result["numbers"]["official"] == "90.00"
 
 
 # ---------------------------------------------------------------------------
@@ -256,22 +263,17 @@ def test_c3_context_note_contains_verbatim_sentence():
 # ---------------------------------------------------------------------------
 
 def test_c3_cross_check_mismatch(monkeypatch):
-    """When stated change does not match computed change, verdict is not_checkable.
+    """Stated change ($18.00) != computed (202.90 - 185.00 = $17.90) -> not_checkable.
 
-    Paragraph contains the anchor so before/after are extracted correctly
-    (202.90 - 185.00 = 17.90 computed). A patched regex_stated_change
-    captures $18.00 from a second sentence, creating a 17.90 != 18.00 mismatch.
+    Number-free anchor matches the paragraph, regexes run sentence-scoped, producing
+    computed=17.90 vs stated=18.00. No regex patching needed (D-41).
     """
     config = _config()
     claims = _claims()
 
-    # Paragraph has the anchor plus an extra sentence with a different amount.
-    # regex_before/regex_after extract from the anchor sentence as normal.
-    # Patched regex_stated_change extracts from the extra sentence.
     fake_para = (
         "The standard monthly premium for Medicare Part B enrollees will be "
-        "$202.90 for 2026, an increase of $17.90 from $185.00 in 2025. "
-        "The uncorrected change would have been $18.00."
+        "$202.90 for 2026, an increase of $18.00 from $185.00 in 2025."
     )
     fake_snap = {
         "paragraphs": [fake_para],
@@ -280,11 +282,6 @@ def test_c3_cross_check_mismatch(monkeypatch):
         "live": False,
         "live_changed": False,
     }
-
-    # Patch regex_stated_change to capture $18.00 (computed stays 17.90 -> mismatch)
-    claims["claims"]["medicare_checks_2026_10"]["C3"]["checks"]["regex_stated_change"] = (
-        r"uncorrected change would have been \$([\d.]+)"
-    )
 
     with patch("claim_check.fetch_source_by_name", return_value=fake_snap):
         result = check_claim(config, claims, "medicare_checks_2026_10", "C3")
@@ -348,16 +345,18 @@ def test_anchor_missing_on_live_page_uses_snapshot(monkeypatch):
 def test_wh_anchor_found_in_snapshot():
     snap = load_snapshot("medicare_checks_2026_10", "wh_medicare_fact_sheet")
     assert snap is not None, "WH Medicare snapshot missing"
-    anchor = "one-time payments of $90 per person to help more than 20 million enrollees"
+    # Number-free anchor (D-41)
+    anchor = "announced that the federal government will be making one-time payments of"
     found = _find_paragraph(anchor, snap["paragraphs"])
-    assert found is not None, f"Anchor not found in WH snapshot"
+    assert found is not None, "Anchor not found in WH snapshot"
     assert "20 million" in found
 
 
 def test_cms_c3_anchor_found_in_snapshot():
     snap = load_snapshot("medicare_checks_2026_10", "cms_2026_premiums")
     assert snap is not None, "CMS snapshot missing"
-    anchor = "will be $202.90 for 2026, an increase of $17.90 from $185.00"
+    # Number-free anchor (D-41)
+    anchor = "The standard monthly premium for Medicare Part B enrollees will be"
     found = _find_paragraph(anchor, snap["paragraphs"])
     assert found is not None, "C3 anchor not found in CMS snapshot"
     assert "202.90" in found
@@ -366,14 +365,16 @@ def test_cms_c3_anchor_found_in_snapshot():
 def test_cms_context_anchor_found_in_snapshot():
     snap = load_snapshot("medicare_checks_2026_10", "cms_2026_premiums")
     assert snap is not None, "CMS snapshot missing"
-    anchor = "the Part B premium increase would have been about $11 more a month"
+    # Number-free anchor (D-41)
+    anchor = "had not taken action to address unprecedented spending on skin substitutes"
     found = _find_paragraph(anchor, snap["paragraphs"])
     assert found is not None, "context_note anchor not found in CMS snapshot"
 
 
 def test_cms_c3_numbers_extract_correctly():
     snap = load_snapshot("medicare_checks_2026_10", "cms_2026_premiums")
-    anchor = "will be $202.90 for 2026, an increase of $17.90 from $185.00"
+    # Number-free anchor (D-41): runs regex on the sentence containing anchor only
+    anchor = "The standard monthly premium for Medicare Part B enrollees will be"
 
     before, _ = _extract_number(anchor, r"from \$([\d.]+) in 2025", snap["paragraphs"])
     after, _ = _extract_number(anchor, r"will be \$([\d.]+) for 2026", snap["paragraphs"])
@@ -382,3 +383,92 @@ def test_cms_c3_numbers_extract_correctly():
     assert before == Decimal("185.00"), f"Expected 185.00, got {before}"
     assert after == Decimal("202.90"), f"Expected 202.90, got {after}"
     assert stated == Decimal("17.90"), f"Expected 17.90, got {stated}"
+
+
+# ---------------------------------------------------------------------------
+# Anchor fallback tests (D-43)
+# ---------------------------------------------------------------------------
+
+def test_live_200_marker_present_required_anchor_missing_uses_snapshot():
+    """Live page has marker but not the required anchor -> falls back to snapshot.
+
+    The snapshot has the anchor, so the verdict is still contradicted (real data).
+    live=False and live_changed=True on the result.
+    """
+    config = _config()
+    claims = _claims()
+
+    # Live page: has marker phrase but NOT the C3 anchor phrase
+    fake_html = (
+        b"<html><body><div class=\"field--name-body\">"
+        b"<p>Medicare Part B Premium and Deductible</p>"
+        b"<p>The 2026 Part B standard premium information is here.</p>"
+        b"</div></body></html>"
+    )
+    mock_resp = type("R", (), {"status_code": 200, "content": fake_html})()
+
+    with patch("sources.fetch_source", return_value=mock_resp):
+        result = check_claim(config, claims, "medicare_checks_2026_10", "C3")
+
+    assert result["verdict"] == "contradicted"
+    assert result["live"] is False
+    assert result["live_changed"] is True
+
+
+def test_anchor_missing_in_live_and_snapshot_returns_not_checkable():
+    """Anchor absent in both live page and snapshot -> not_checkable."""
+    config = _config()
+    claims = _claims()
+
+    fake_html = (
+        b"<html><body><div class=\"field--name-body\">"
+        b"<p>Medicare Part B Premium and Deductible</p>"
+        b"<p>The 2026 Part B standard premium information is here.</p>"
+        b"</div></body></html>"
+    )
+    mock_resp = type("R", (), {"status_code": 200, "content": fake_html})()
+
+    # Snapshot also lacks the anchor phrase
+    fake_snap = {
+        "paragraphs": ["Some CMS text without the target anchor phrase."],
+        "url": "https://example.com",
+        "retrieved_at": "2026-10-05",
+        "language": "en",
+    }
+
+    with patch("sources.fetch_source", return_value=mock_resp), \
+         patch("sources.load_snapshot", return_value=fake_snap):
+        result = check_claim(config, claims, "medicare_checks_2026_10", "C3")
+
+    assert result["verdict"] == "not_checkable"
+    assert "anchor not found in live page or snapshot" in result["reason"]
+
+
+def test_number_change_on_live_page_uses_live_numbers():
+    """When the live page has a different premium (anchor intact), live numbers are used.
+
+    Marker phrase present; no old number ($202.90) anywhere on the page.
+    The main sentence has $205.00, so regexes extract the new values from the live page.
+    """
+    config = _config()
+    claims = _claims()
+
+    # Anchor phrase is present; numbers differ from snapshot
+    fake_html = (
+        b"<html><body><div class=\"field--name-body\">"
+        b"<p>Medicare Part B Premium and Deductible</p>"
+        b"<p>The standard monthly premium for Medicare Part B enrollees will be"
+        b" $205.00 for 2026, an increase of $20.00 from $185.00 in 2025.</p>"
+        b"</div></body></html>"
+    )
+    mock_resp = type("R", (), {"status_code": 200, "content": fake_html})()
+
+    with patch("sources.fetch_source", return_value=mock_resp):
+        result = check_claim(config, claims, "medicare_checks_2026_10", "C3")
+
+    # Live page numbers used, not snapshot
+    assert result["live"] is True
+    assert result["numbers"]["2026_premium"] == "205.00"
+    assert result["numbers"]["2025_premium"] == "185.00"
+    assert result["numbers"]["monthly_change"] == "+20.00"
+    assert result["verdict"] == "contradicted"

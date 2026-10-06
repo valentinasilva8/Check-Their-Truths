@@ -44,6 +44,9 @@ A running log of every project decision, so we can refer back to why things are 
 | D-38 | 2026-10-05 | C1 supported: noun differences (enrollees vs Seniors) are outside the at_least rule | Active |
 | D-39 | 2026-10-05 | context_note format: fixed lead-in "CMS also states:" + verbatim verified CMS sentence; model never writes it | Active |
 | D-40 | 2026-10-05 | Claim cards show source name plainly with link; no editorial notes | Active |
+| D-41 | 2026-10-05 | Anchors and markers are number-free; regexes run on the sentence containing the anchor, not the full paragraph | Active |
+| D-42 | 2026-10-05 | C1 checks label renamed from senior_enrollment_count to enrollee_count | Active |
+| D-43 | 2026-10-05 | Internal helpers _try_live and _try_snapshot replace duplicate live-first logic | Active |
 
 ---
 
@@ -285,6 +288,13 @@ A running log of every project decision, so we can refer back to why things are 
 - **Alternatives rejected:** Official value as denominator (measures how far the official is from the claim, which is harder to interpret); hiding thresholds from the UI (users cannot verify the verdict without them).
 - **Status:** Active
 
+### D-35: Post reference, claimed_phrase verification, and C3 cross-check
+- **Date:** 2026-10-05
+- **Decision:** Each claim in claims.toml references a named post by ID. Before applying any rule, code verifies that `claimed_phrase` is an exact substring of the post's `verbatim_text`. If not, verdict is `not_checkable` with reason "claimed_phrase not found in post text". For C3 (direction), code additionally extracts the increase amount CMS explicitly states using `regex_stated_change` on the anchor sentence, then verifies it matches the computed difference (after - before). If they differ, verdict is `not_checkable` with reason "stated and computed changes do not match". Phase M tests include: `test_claimed_phrase_not_in_post` (not_checkable), `test_c3_cross_check_mismatch` (not_checkable). Phase M test `test_c3_contradicted` checks for fields 2025_premium, 2026_premium, monthly_change, pct_change, annual_change (annual_net_of_payment is not returned).
+- **Why:** Verifying claimed_phrase keeps the connection between the claim and its source text explicit and machine-checkable. The C3 cross-check catches the case where a regex extracts the wrong number from the anchor sentence -- for example, a number from an adjacent sentence that slips into the match.
+- **Alternatives rejected:** Trusting the claimed_phrase without checking (would silently pass claims whose source text was edited); skipping the cross-check (would not catch CMS page changes that affect the arithmetic).
+- **Status:** Active
+
 ### D-36: AI naming is different_framing; contradiction definition
 - **Date:** 2026-10-05
 - **Decision:** The AI naming row for washington_2026_09 is labeled "different_framing", not "contradiction". The US statement says both leaders agreed to use "super intelligence"; China's English statement says nothing about terminology and uses "AI" throughout. That is omission plus different wording, not an explicit incompatible claim. "contradiction" in compare_statements is reserved for cases where both sides make explicit factual claims that cannot both be true (see D-25). check_claim's "contradicted" verdict (Medicare C3) is separate and follows D-31/D-33; that verdict is mechanically derived from numbers, not from the label set here.
@@ -303,7 +313,7 @@ A running log of every project decision, so we can refer back to why things are 
 - **Date:** 2026-10-05
 - **Decision:** C1 verdict is "supported". The at_least rule compares numbers only. The WH fact sheet says "more than 20 million enrollees"; the post says "over 20 MILLION wonderful Seniors". "Enrollees" and "Seniors" are different nouns. This difference is not evaluated by the at_least rule; the number (20,000,000) meets or exceeds the claimed value (20,000,000).
 - **Why:** The rule is about the numerical claim, not the descriptive noun. The WH itself titles the section "IMPROVING MEDICARE FOR SENIORS", making clear the enrollees referred to are seniors. Expanding the rule to check noun alignment would require natural-language judgment that belongs in the model's response, not in the arithmetic rule.
-- **Alternatives rejected:** Returning not_checkable when nouns differ (overcomplicates the rule; the numerical check is what the tool is for); ignoring the noun difference in the result (it is noted in the reason field).
+- **Alternatives rejected:** Returning not_checkable when nouns differ (overcomplicates the rule; the numerical check is what the tool is for); ignoring the noun difference.
 - **Status:** Active
 
 ### D-39: context_note format: fixed lead-in plus verbatim verified CMS sentence
@@ -320,9 +330,23 @@ A running log of every project decision, so we can refer back to why things are 
 - **Alternatives rejected:** Adding editorial context to the source citation (introduces bias; violates the neutrality rule in CLAUDE.md); omitting the source link (users could not verify the claim).
 - **Status:** Active
 
-### D-35: Post reference, claimed_phrase verification, and C3 cross-check
+### D-41: Anchors and markers are number-free; regexes run on the sentence containing the anchor
 - **Date:** 2026-10-05
-- **Decision:** Each claim in claims.toml references a named post by ID. Before applying any rule, code verifies that `claimed_phrase` is an exact substring of the post's `verbatim_text`. If not, verdict is `not_checkable` with reason "claimed_phrase not found in post text". For C3 (direction), code additionally extracts the increase amount CMS explicitly states in `anchor_after` using `regex_stated_change`, then verifies it matches the computed difference (after - before). If they differ, verdict is `not_checkable` with reason "stated and computed changes do not match". Phase M tests include: `test_claimed_phrase_not_in_post` (not_checkable), `test_c3_cross_check_mismatch` (not_checkable). Phase M test `test_c3_contradicted` checks for fields 2025_premium, 2026_premium, monthly_change, pct_change, annual_change (annual_net_of_payment is not returned).
-- **Why:** Verifying claimed_phrase keeps the connection between the claim and its source text explicit and machine-checkable. The C3 cross-check catches the case where the CMS page is updated with corrected figures that no longer match the stored anchor sentence.
-- **Alternatives rejected:** Trusting the claimed_phrase without checking (would silently pass claims whose source text was edited); skipping the cross-check (would not catch CMS page changes that affect the arithmetic).
+- **Decision:** Anchors in claims.toml contain no numbers. An anchor locates the sentence; regex patterns extract numbers from that sentence only. `_extract_number` in claim_check.py calls `_extract_sentence` to scope regex search to the sentence, not the full paragraph. This means if a source updates a number, regexes pick it up from the live page; the anchor still matches because it does not contain the old number. Year labels in regexes ("for 2026", "in 2025") are fine; they are search constraints, not answers. Markers in sources.toml also contain no numbers for the same reason: a number-containing marker breaks if the source corrects a figure, causing the live page check to fail and the tool to fall back to the outdated snapshot.
+- **Why:** Number-containing anchors break when the source corrects a figure: the anchor phrase is no longer on the page, so the claim returns not_checkable even if the correct data is present. Sentence-scoped regexes also prevent numbers in adjacent sentences (e.g., deductible amounts in the same paragraph) from being captured by mistake.
+- **Alternatives rejected:** Number-containing anchors with a fallback mechanism (adds complexity without solving the root problem); paragraph-scoped regexes (risk of matching the wrong sentence's numbers).
+- **Status:** Active
+
+### D-42: C1 and C2 checks labels renamed to match source language
+- **Date:** 2026-10-05
+- **Decision:** The `label` field for C1's checks dict is `enrollee_count`, matching the word the official source uses ("enrollees"). The previous label was `senior_enrollment_count`. The `label` field for C2's checks dict is `payment_per_person_usd`, matching the source phrase "per person". The previous label was `payment_per_senior_usd`.
+- **Why:** The WH fact sheet says "more than 20 million enrollees" and "payments of $90 per person". Labels should match the source language so the config is self-consistent and auditable.
+- **Alternatives rejected:** Keeping old labels (inconsistent with source text; labels that differ from source phrasing require cross-referencing to understand).
+- **Status:** Active
+
+### D-43: One internal fetch function replaces duplicate live-first logic
+- **Date:** 2026-10-05
+- **Decision:** `get_official_source` and `fetch_source_by_name` now share two internal helpers: `_try_live(config, source, required_anchors=None)` and `_try_snapshot(case_id, source_name, required_anchors=None)`. A live page counts as usable only if: HTTP 200, marker found, at least one paragraph extracted, and every required anchor found. If the live page returns 200 but fails any check, `live_changed=True`. `check_claim` passes `required_anchors=[checks_anchor]` so that a live page lacking the anchor falls back to snapshot. If snapshot also lacks the anchor, `fetch_source_by_name` returns `{"anchor_missing": True, ...}` and `check_claim` converts that to not_checkable with reason "anchor not found in live page or snapshot". `get_official_source` (meeting cases) passes `required_anchors=None`.
+- **Why:** The duplicate live-first logic in both functions was identical except for the anchor check. A single internal function reduces the surface area for bugs when the fetch validity rules change.
+- **Alternatives rejected:** Keeping separate functions (maintenance burden; any rule change must be applied twice); merging into one public function (meeting and claim-check cases have different call signatures and return shapes).
 - **Status:** Active
