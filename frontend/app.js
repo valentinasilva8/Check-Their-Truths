@@ -412,15 +412,26 @@ function renderEvidence(parent, calls) {
 
 function renderTrail(parent, calls, onSelect) {
   parent.replaceChildren();
-  (calls || []).forEach((call, index) => {
-    if (index) parent.appendChild(el("span", "arrow", "→"));
+  const list = calls || [];
+  const count = list.length;
+  const caption = count === 0
+    ? "No sources used"
+    : `How I got this · ${count} ${count === 1 ? "step" : "steps"} · tap a step to inspect`;
+  parent.appendChild(el("p", "trail-caption", caption));
+  if (!count) return;
+
+  const steps = el("div", "trail-steps");
+  const dumps = el("div", "trail-dumps");
+  list.forEach((call, index) => {
+    if (index) steps.appendChild(el("span", "arrow", "→"));
     const parsed = parseResult(call);
-    const wrap = el("div", "chip-wrap");
     const button = el("button", "chip");
     button.type = "button";
+    button.title = "View arguments and result";
     const failed = Boolean(parsed.error);
     button.appendChild(el("span", failed ? "mark bad" : "mark ok", failed ? "!" : "✓"));
     button.appendChild(document.createTextNode(trailLabel(call, parsed)));
+    button.appendChild(el("span", "chevron", "›"));
     const dump = el("pre", "dump");
     dump.hidden = true;
     const argsText = JSON.stringify(call.args || {}, null, 2);
@@ -433,12 +444,15 @@ function renderTrail(parent, calls, onSelect) {
     dump.textContent = `${argsText}\n\n${resultText}`;
     button.addEventListener("click", (event) => {
       event.stopPropagation();
-      dump.hidden = !dump.hidden;
+      const open = dump.hidden;
+      dump.hidden = !open;
+      button.classList.toggle("open", open);
       onSelect();
     });
-    wrap.append(button, dump);
-    parent.appendChild(wrap);
+    steps.appendChild(button);
+    dumps.appendChild(dump);
   });
+  parent.append(steps, dumps);
 }
 
 function selectTurn(turn) {
@@ -458,7 +472,7 @@ function appendTurn(question, data) {
   const body = el("div", "markdown");
   body.innerHTML = renderMarkdown(data.response || "");
   const trail = el("div", "trail");
-  assistant.append(body, trail);
+  assistant.append(trail, body);
   assistant.addEventListener("click", () => selectTurn(turn));
   const inline = el("div", "inline-evidence");
   renderTrail(trail, turn._calls, () => selectTurn(turn));

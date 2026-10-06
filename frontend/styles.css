@@ -100,8 +100,14 @@ main {
 .turn { margin: 0 0 22px; }
 
 .user-line {
-  margin: 0 0 10px;
-  font-weight: 600;
+  margin: 0 0 12px auto;
+  max-width: 85%;
+  width: fit-content;
+  padding: 8px 12px;
+  background: #F1F1EF;
+  border-radius: 12px;
+  font-weight: 400;
+  font-size: 1rem;
 }
 
 .assistant {
@@ -121,14 +127,21 @@ main {
 .markdown strong { font-weight: 600; }
 
 .trail {
+  margin: 0 0 12px;
+}
+
+.trail-caption {
+  margin: 0 0 6px;
+  color: var(--muted);
+  font-size: 0.75rem;
+}
+
+.trail-steps {
   display: flex;
   flex-wrap: wrap;
   align-items: center;
   gap: 6px;
-  margin-top: 12px;
 }
-
-.chip-wrap { display: flex; flex-direction: column; max-width: 100%; }
 
 .chip {
   font-family: "IBM Plex Mono", ui-monospace, monospace;
@@ -140,6 +153,21 @@ main {
   border-radius: 4px;
   padding: 4px 7px;
   cursor: pointer;
+}
+
+.chip:hover {
+  background: #f3f3f1;
+  border-color: #c4c4c4;
+}
+
+.chevron {
+  display: inline-block;
+  margin-left: 6px;
+  transition: transform 0.15s ease;
+}
+
+.chip.open .chevron {
+  transform: rotate(90deg);
 }
 
 .chip .mark { margin-right: 4px; }

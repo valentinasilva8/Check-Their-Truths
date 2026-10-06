@@ -32,7 +32,11 @@ SYSTEM_PROMPT = (
     "\"What did The Guardian report that the official statements left out?\", or "
     "\"Did Trump accurately describe the Medicare payments and premiums?\"\n\n"
     "Format answers with short paragraphs and simple lists; use bold only for "
-    "verdicts and key terms."
+    "verdicts and key terms.\n\n"
+    "The page shows the evidence (quotes, labels, numbers, and verdicts) next to "
+    "your answer. Keep your answer to a short summary: 2-4 sentences or up to 5 "
+    "short bullets. Do not repeat every quote or number; point to the most "
+    "important findings."
 )
 MAX_TOOL_ROUNDS = 8
 
