@@ -68,13 +68,13 @@ role = "term_check_only"
 [cases.medicare_checks_2026_10]
 type = "claim_check"
 name = "Medicare Part B premium claims, October 2026"
-dates = "2026-10-01"
+dates = "2026-10-02"
 
 [[cases.medicare_checks_2026_10.sources]]
 name = "wh_medicare_fact_sheet"
 side = "us"
 language = "en"
-url = "TODO"
+url = "https://www.whitehouse.gov/fact-sheets/2026/10/fact-sheet-president-donald-j-trump-announces-medicare-improvement-fund-payments-for-seniors/"
 marker = "TODO"
 priority = 1
 
@@ -82,6 +82,6 @@ priority = 1
 name = "cms_2026_premiums"
 side = "us"
 language = "en"
-url = "TODO"
+url = "https://www.cms.gov/newsroom/fact-sheets/2026-medicare-parts-b-premiums-deductibles"
 marker = "TODO"
 priority = 1

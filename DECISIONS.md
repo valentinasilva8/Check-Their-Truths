@@ -18,23 +18,26 @@ A running log of every project decision, so we can refer back to why things are 
 | D-12 | 2026-10-05 | Comparison call: temperature 0, cached per meeting | Active |
 | D-13 | 2026-10-05 | Commitments: hand-curated with exact quote, deadline wording, and snapshot test | Active |
 | D-14 | 2026-10-05 | Dropped rows reported to the user, never hidden silently | Active |
-| D-15 | 2026-10-05 | Neutrality: report differences, never judge who is right | Active |
+| D-15 | 2026-10-05 | Neutrality: report differences for meetings, never judge; claim checks use fixed rules only | Active |
 | D-16 | 2026-10-05 | Safety: tools only fetch URLs from config/sources.toml | Active |
 | D-17 | 2026-10-05 | HTML parsing: beautifulsoup4 with lxml parser | Active |
 | D-18 | 2026-10-05 | Two cases: washington_2026_09 (meeting) and medicare_checks_2026_10 (claim_check) | Active |
 | D-19 | 2026-10-05 | Medicare claim check approved; Guardian Medicare search returned false positives only | Active |
-| D-20 | 2026-10-05 | Guardian API approved for washington_2026_09 press side; two curated article IDs | Active |
-| D-21 | 2026-10-05 | Live blogs excluded from press_articles (wordcount >= 4000) | Active |
+| D-20 | 2026-10-05 | Guardian API approved; Thucydides article mentions both AI terms and Taiwan; weapons article mentions Taiwan | Active |
+| D-21 | 2026-10-05 | Live blogs excluded from press_articles; identified by Guardian API type field "liveblog" | Active |
 | D-22 | 2026-10-05 | Guardian paragraphs cached in memory only, never written to disk | Active |
 | D-23 | 2026-10-05 | Guardian bodyText never stored in repo; press test fixtures use invented text only | Active |
 | D-24 | 2026-10-05 | Press spans over 25 words trimmed with "..."; rows never dropped for length | Active |
-| D-25 | 2026-10-05 | Echo count 0 confirmed for both curated articles | Active |
+| D-25 | 2026-10-05 | compare_statements uses same/different_framing/contradiction/only_{side} for every pair | Active |
 | D-26 | 2026-10-05 | Guardian API key loaded lazily; /secrets/guardian.toml on Cloud Run, config/secrets.toml locally | Active |
 | D-27 | 2026-10-05 | Press articles are curated in config, never searched at runtime | Active |
 | D-28 | 2026-10-05 | check_claim replaces track_commitments | Active |
-| D-29 | 2026-10-05 | Truth Social post text hard-coded in claims.toml; original_url = "TODO" | Active |
+| D-29 | 2026-10-05 | Truth Social post (source for C1, C2, C3) hard-coded verbatim in claims.toml; original_url = "TODO" | Active |
 | D-30 | 2026-10-05 | Python Decimal arithmetic for dollar amounts; expressions stored as strings | Active |
 | D-31 | 2026-10-05 | Claim rules general (at_least, approximately, direction); verdicts never in config | Active |
+| D-32 | 2026-10-05 | Press rows carry attributed_to (named person or null for outlet's own reporting) | Active |
+| D-33 | 2026-10-05 | check_claim verdicts: supported, imprecise, contradicted, not_checkable; context_note for other reasonable readings | Active |
+| D-34 | 2026-10-05 | approximately thresholds: 5% supported, 25% imprecise, >25% contradicted; denominator is claimed value | Active |
 
 ---
 
@@ -136,11 +139,11 @@ A running log of every project decision, so we can refer back to why things are 
 - **Alternatives rejected:** Silent drop with only a server log (hides failures from the user).
 - **Status:** Active
 
-### D-15: Neutrality
+### D-15: Neutrality (amended)
 - **Date:** 2026-10-05
-- **Decision:** The tool reports what each side says and where the texts differ. It never judges who is right, uses loaded words, or speculates about motives.
-- **Why:** The intended users are journalists, students, and analysts who need the raw comparison, not an editorial opinion.
-- **Alternatives rejected:** None
+- **Decision:** For meeting comparisons, the tool reports what each side says and where the texts differ. It never judges which government is right, uses loaded words, or speculates about motives. Claim checks are the exception: check_claim returns a verdict, but only by applying the fixed rules in D-31, D-33, and D-34 to official source data. The verdict follows the plain reading of the claim; no editorial judgment is involved.
+- **Why:** The intended users are journalists, students, and analysts who need the raw comparison, not an editorial opinion. Claim checks are different in kind: the verdict is a mechanical comparison of a stated number against an official source, not a political judgment.
+- **Alternatives rejected:** Applying neutrality equally to claim checks (would prevent ever saying a number is wrong, even when official data clearly contradicts it).
 - **Status:** Active
 
 ### D-17: HTML parsing library
@@ -173,16 +176,16 @@ A running log of every project decision, so we can refer back to why things are 
 
 ### D-20: Guardian API approved for washington_2026_09
 - **Date:** 2026-10-05
-- **Decision:** The Guardian API is approved as a press side for the washington_2026_09 case. Two curated article IDs are stored in config/sources.toml. The API is only called for those IDs; no search queries are issued at runtime.
-- **Why:** Both curated articles are substantive (1075 and 613 words), mention the key AI naming and Taiwan topics, and have echo count 0 (no verbatim repetition of WH text), confirming independent coverage.
-- **Alternatives rejected:** Live blog articles (5749 and 8127 words; mix of many unrelated topics; not suitable for topic-by-topic comparison).
+- **Decision:** The Guardian API is approved as a press side for the washington_2026_09 case. Two curated article IDs are stored in config/sources.toml. The API is only called for those IDs; no search queries are issued at runtime. The Thucydides trap article (1075 words) mentions both AI naming terms (super intelligence, artificial intelligence) and Taiwan. The weapons article (613 words) mentions Taiwan.
+- **Why:** Both curated articles are substantive and directly cover the meeting topics. Curated selection confirmed by manual review.
+- **Alternatives rejected:** Live blog articles from the same search (live blog type confirmed via Guardian API; those articles aggregate many unrelated updates and are not suitable for topic-by-topic comparison).
 - **Status:** Active
 
 ### D-21: Live blogs excluded from press_articles
 - **Date:** 2026-10-05
-- **Decision:** Articles with wordcount >= 4000 are treated as live blogs and excluded from press_articles. Curated IDs are manually reviewed before being added to config.
-- **Why:** Live blog articles aggregate many unrelated updates into a single URL. A comparison against them would produce noisy, hard-to-attribute rows.
-- **Alternatives rejected:** Including all returned articles from a keyword search (returns live blogs, opinion pieces, and off-topic results).
+- **Decision:** Live blogs are identified by the Guardian API `type` field value `"liveblog"` and excluded from press_articles. Curated IDs are manually reviewed before being added to config.
+- **Why:** Live blog articles aggregate many unrelated updates into a single URL. A comparison against them would produce noisy, hard-to-attribute rows. Using the API type field is more reliable than a wordcount threshold.
+- **Alternatives rejected:** Wordcount threshold (a long feature article would be excluded; a short live blog summary would pass); including all returned articles from a keyword search (returns live blogs, opinion pieces, and off-topic results).
 - **Status:** Active
 
 ### D-22: Guardian paragraphs cached in memory only
@@ -206,11 +209,11 @@ A running log of every project decision, so we can refer back to why things are 
 - **Alternatives rejected:** Dropping rows over 25 words (reduces coverage; the full span is still verifiable even if the displayed text is trimmed).
 - **Status:** Active
 
-### D-25: Echo count confirmed at 0
+### D-25: compare_statements label set applies to every pair
 - **Date:** 2026-10-05
-- **Decision:** Both curated Guardian articles have 0 echo sentences from the WH fact sheet, confirmed by 8-gram overlap. This is a one-time check; it is not repeated at runtime.
-- **Why:** A non-zero echo count would mean the press article was largely reprinting official text, making the press side redundant. Zero confirms independent coverage.
-- **Alternatives rejected:** None
+- **Decision:** compare_statements uses the same five labels for every left/right pair: same, different_framing, contradiction, only_{left}, only_{right}. When comparing us vs china the labels are only_us and only_china (as in D-11). When either side is press, the labels become only_{side} (for example, only_press or only_us depending on which side is missing the topic). The left and right side names are substituted literally into the label string.
+- **Why:** A single label set works for any pair. Hardcoding only_us and only_china into the label set would require adding new labels every time a new side is introduced.
+- **Alternatives rejected:** Separate label sets per pair type (adds complexity with no benefit; the meaning is identical).
 - **Status:** Active
 
 ### D-26: Guardian API key loaded lazily
@@ -236,9 +239,9 @@ A running log of every project decision, so we can refer back to why things are 
 
 ### D-29: Truth Social post text hard-coded in claims.toml
 - **Date:** 2026-10-05
-- **Decision:** The verbatim text of the Trump Truth Social post used as claim C3 is stored in `config/claims.toml`. The `original_url` field is set to "TODO" pending manual lookup. The UI and README disclose that the post text is hard-coded and the URL is pending.
-- **Why:** Truth Social does not support programmatic access. Hard-coding the verbatim text is the only option. A "TODO" URL is honest; an invented URL would violate the rule against inventing URLs.
-- **Alternatives rejected:** Fetching the post at runtime (no API); omitting the post and using a speech transcript instead (Truth Social post is more checkable because it makes a specific, unambiguous claim).
+- **Decision:** The verbatim text of the Trump Truth Social post that is the source for claims C1, C2, and C3 is stored in `config/claims.toml`. The `original_url` field is set to "TODO" pending manual lookup. The UI and README disclose that the post text is hard-coded and the URL is pending.
+- **Why:** The post cannot be fetched reliably. Hard-coding the verbatim text is the only option. A "TODO" URL is honest; an invented URL would violate the rule against inventing URLs.
+- **Alternatives rejected:** Fetching the post at runtime (not reliably possible); omitting the post and using a speech transcript instead (the Truth Social post makes specific, unambiguous numerical claims that map directly to the at_least, approximately, and direction rules).
 - **Status:** Active
 
 ### D-30: Python Decimal arithmetic for all dollar amounts
@@ -253,4 +256,25 @@ A running log of every project decision, so we can refer back to why things are 
 - **Decision:** Each claim in claims.toml has a `claim_type` field: `at_least`, `approximately`, or `direction`. claim_check.py implements one named function per type. No verdict string ever appears in config. `direction("decrease", 0)` returns "contradicted" (zero change does not confirm a decrease).
 - **Why:** General rules are testable with synthetic numbers independent of the specific claims. Keeping verdicts out of config prevents anyone from hard-coding a desired outcome.
 - **Alternatives rejected:** Per-claim verdict logic in code (not reusable; harder to test); including expected verdicts in config (would make the tool a lookup, not a computation).
+- **Status:** Active
+
+### D-32: Press rows carry attributed_to
+- **Date:** 2026-10-05
+- **Decision:** Every press comparison row includes an `attributed_to` field. When the press article reports that a specific person or official made the claim in the row, `attributed_to` names that person. When the row reflects the outlet's own reporting or synthesis, `attributed_to` is null.
+- **Why:** Press articles often paraphrase officials. Showing who the press attributes the claim to lets users distinguish "the outlet's analysis" from "official X said this, per the outlet".
+- **Alternatives rejected:** Always null (loses attribution information); always the article byline (the byline is the author, not the claim's source).
+- **Status:** Active
+
+### D-33: check_claim verdict set and context_note rules
+- **Date:** 2026-10-05
+- **Decision:** check_claim returns one of four verdicts: supported, imprecise, contradicted, not_checkable. The verdict follows the plain reading of the claim as stated. Any other reasonable reading of the claim that would change the verdict goes in an optional `context_note`, never in the verdict itself. A context_note must cite a verified source sentence, subject to the same verification rules as comparison quotes (exact substring, minimum 6 words, after normalization).
+- **Why:** A single plain-reading verdict is unambiguous and reproducible. Burying alternative interpretations in the verdict would make the verdict depend on editorial judgment. A verified context_note lets users see the nuance without it overriding the result.
+- **Alternatives rejected:** Multiple verdicts per claim (confusing; the rule is meant to give one answer); unverified context_notes (could introduce invented or misquoted context).
+- **Status:** Active
+
+### D-34: approximately thresholds
+- **Date:** 2026-10-05
+- **Decision:** The approximately rule uses the claimed value as the denominator. Thresholds: difference <= 5% of claimed value is supported; <= 25% is imprecise; > 25% is contradicted. A difference of exactly 5% is supported; exactly 25% is imprecise. These thresholds are shown on the claim card in the UI.
+- **Why:** Using the claimed value as denominator measures how far off the claim is from its own stated number, which is the natural reading. Displaying the thresholds lets users see why the verdict was assigned without having to read the code.
+- **Alternatives rejected:** Official value as denominator (measures how far the official is from the claim, which is harder to interpret); hiding thresholds from the UI (users cannot verify the verdict without them).
 - **Status:** Active
