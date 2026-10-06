@@ -375,7 +375,13 @@ def get_official_source(config: dict, case_id: str, side: str) -> dict:
     for source in sources:
         result, changed = _try_live(config, source)
         if result:
-            return {**result, "case_id": case_id, "side": side}
+            return {
+                **result,
+                "case_id": case_id,
+                "side": side,
+                "display_name": source.get("display_name"),
+                "published": source.get("published"),
+            }
         if changed:
             any_live_changed = True
 
@@ -383,7 +389,13 @@ def get_official_source(config: dict, case_id: str, side: str) -> dict:
     for source in sources:
         snap, _ = _try_snapshot(case_id, source["name"])
         if snap:
-            result = {**snap, "case_id": case_id, "side": side}
+            result = {
+                **snap,
+                "case_id": case_id,
+                "side": side,
+                "display_name": source.get("display_name"),
+                "published": source.get("published"),
+            }
             if any_live_changed:
                 result["live_changed"] = True
                 result["live_changed_note"] = "live page changed or unavailable; showing snapshot"
@@ -428,10 +440,14 @@ def fetch_source_by_name(
 
     live_result, live_changed = _try_live(config, source, required_anchors)
     if live_result:
+        live_result["display_name"] = source.get("display_name")
+        live_result["published"] = source.get("published")
         return live_result
 
     snap_result, anchor_missing = _try_snapshot(case_id, source_name, required_anchors)
     if snap_result:
+        snap_result["display_name"] = source.get("display_name")
+        snap_result["published"] = source.get("published")
         if live_changed:
             snap_result["live_changed"] = True
             snap_result["live_changed_note"] = "live page changed or unavailable; showing snapshot"

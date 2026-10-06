@@ -70,7 +70,8 @@ Tools serialize these to JSON strings (not dicts) before returning.
 
 **get_press_coverage(case_id: str)** -- added in Phase P
 - Description: "Fetch Guardian press coverage for a meeting case. Returns headline, byline, url, published, and paragraphs for each curated article. Returns error if the API key is unavailable."
-- Meeting cases only. Paragraphs cached in memory; never written to disk.
+- Meeting cases only. Paragraphs cached in memory. Full article text is never committed (D-22).
+- A content-free hash record is written only by `uv run python press.py --save-citations` into `data/press_citations/{case_id}.json` (url, headline, byline, paragraph id, published, retrieved_at, attributed_to, quote_sha256). `uv run python press.py --verify-citations` re-fetches and checks the hashes. compare_statements does not read or write that file. Press caches expire after 23 hours (D-22, D-23).
 
 **compare_statements(case_id: str, topic: str = "", left: str = "us", right: str = "china")**
 - Description: "Compare two sides' coverage of a case topic by topic. left and right can be 'us', 'china', or 'press'. Returns rows labeled 'same', 'different_framing', 'contradiction', 'only_{left}', or 'only_{right}'. Each row includes a reason, verified quotes, and attributed_to (press rows only). For the AI topic on washington_2026_09 also reports 人工智能 / 超级智能 presence. Unverifiable rows are reported, not dropped silently. Meeting cases only."
@@ -164,7 +165,7 @@ Tool calls collapse/expand. Each statement carries a green LIVE or yellow SNAPSH
 - `compare_statements`: invalid label dropped; contradiction missing right_quote dropped
 - `compare_statements`: model returns invalid JSON -> error in result, no crash
 - `compare_statements`: wrong case type -> error mentions "meeting"
-- `compare_statements`: press side -> "not available yet"
+- `compare_statements`: press side unavailable when the fetch fails; a span is kept only when its words match the named paragraph; spans over 40 words are dropped; a moved comma still verifies and the row shows the source punctuation
 - Chinese term check fires for topic="ai", "artificial intelligence", empty; not for "coal trade"
 - term_check row not counted toward 12-row cap; cap_hit reported
 - Cache: second call with same inputs does not call model
@@ -177,8 +178,11 @@ Tool calls collapse/expand. Each statement carries a green LIVE or yellow SNAPSH
 - Million-word parsing for C1
 
 `tests/test_press.py` (Phase P)
-- Guardian fetch with mocked API; paragraphs cached in memory
-- Secrets absent -> "press side unavailable"
+- Guardian fetch with mocked API and invented text; paragraph ids A1-P1, A2-P1; in-memory cache
+- Secrets absent or API 500 -> "press side unavailable"
+- Live blogs excluded
+- Citation record rejects stored quote text, or a missing url, headline, byline, paragraph id, published, retrieved_at, or hash
+- compare_statements does not write the citation file
 
 **Manual**
 - "Compare the Washington 2026 statements on AI" -- confirm "super intelligence" and "Eight Deliverables" appear as verbatim quotes with source links

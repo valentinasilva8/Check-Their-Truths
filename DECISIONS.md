@@ -23,11 +23,11 @@ A running log of every project decision, so we can refer back to why things are 
 | D-17 | 2026-10-05 | HTML parsing: beautifulsoup4 with lxml parser | Active |
 | D-18 | 2026-10-05 | Two cases: washington_2026_09 (meeting) and medicare_checks_2026_10 (claim_check) | Active |
 | D-19 | 2026-10-05 | Medicare claim check approved; Guardian Medicare search returned false positives only | Active |
-| D-20 | 2026-10-05 | Guardian API approved; Thucydides article mentions both AI terms and Taiwan; weapons article mentions Taiwan | Active |
+| D-20 | 2026-10-05 | Guardian API approved for two curated articles; word counts are not used in any logic | Active |
 | D-21 | 2026-10-05 | Live blogs excluded from press_articles; identified by Guardian API type field "liveblog" | Active |
-| D-22 | 2026-10-05 | Guardian paragraphs cached in memory only, never written to disk | Active |
-| D-23 | 2026-10-05 | Guardian bodyText never stored in repo; press test fixtures use invented text only | Active |
-| D-24 | 2026-10-05 | Press spans over 25 words trimmed with "..."; rows never dropped for length | Active |
+| D-22 | 2026-10-06 | Replaced: content-free citation hashes; press caches expire after 23 hours; no Guardian quote text stored | Active |
+| D-23 | 2026-10-06 | Replaced: press spans over the word limit are dropped; every press row shows headline, byline, and link | Active |
+| D-24 | 2026-10-05 | Replaced: the 25-word trim with "..." is withdrawn because Guardian terms forbid editing content | Replaced |
 | D-25 | 2026-10-05 | compare_statements uses same/different_framing/contradiction/only_{side} for every pair | Active |
 | D-26 | 2026-10-05 | Guardian API key loaded lazily; /secrets/guardian.toml on Cloud Run, config/secrets.toml locally | Active |
 | D-27 | 2026-10-05 | Press articles are curated in config, never searched at runtime | Active |
@@ -47,6 +47,13 @@ A running log of every project decision, so we can refer back to why things are 
 | D-41 | 2026-10-05 | Anchors and markers are number-free; regexes run on the sentence containing the anchor, not the full paragraph | Active |
 | D-42 | 2026-10-05 | C1 checks label renamed from senior_enrollment_count to enrollee_count | Active |
 | D-43 | 2026-10-05 | Internal helpers _try_live and _try_snapshot replace duplicate live-first logic | Active |
+| D-44 | 2026-10-06 | Press comparisons use numbered-paragraph prompt version 7; us vs china stays on version 3 | Active |
+| D-45 | 2026-10-06 | AI naming: us vs china pairs the SI agreement with the AI Dialogue; china vs press is only_press | Active |
+| D-46 | 2026-10-06 | China side is the MFA Eight Deliverables statement only; Xinhua talks readout is not a source | Active |
+| D-47 | 2026-10-06 | Press spans match on words with punctuation removed, then display the exact source substring | Active |
+| D-48 | 2026-10-06 | Press span limit is 40 words; longer spans are dropped, never trimmed | Active |
+| D-49 | 2026-10-06 | Xinhua source_note is written by code, not by the model | Active |
+| D-50 | 2026-10-06 | Cloud Run from europe-west1 can reach the White House, CMS, and the Guardian API; the Guardian secret is ready to mount | Active |
 
 ---
 
@@ -185,7 +192,7 @@ A running log of every project decision, so we can refer back to why things are 
 
 ### D-20: Guardian API approved for washington_2026_09
 - **Date:** 2026-10-05
-- **Decision:** The Guardian API is approved as a press side for the washington_2026_09 case. Two curated article IDs are stored in config/sources.toml. The API is only called for those IDs; no search queries are issued at runtime. The Thucydides trap article (1075 words) mentions both AI naming terms (super intelligence, artificial intelligence) and Taiwan. The weapons article (613 words) mentions Taiwan.
+- **Decision:** The Guardian API is approved as a press side for the washington_2026_09 case. Two curated article IDs are stored in config/sources.toml. The API is only called for those IDs; no search queries are issued at runtime. The first curated article mentions both AI naming terms and Taiwan. The second mentions Taiwan and a reported weapons offer. Word counts change when articles are amended and are not used in any logic. Revised 2026-10-06.
 - **Why:** Both curated articles are substantive and directly cover the meeting topics. Curated selection confirmed by manual review.
 - **Alternatives rejected:** Live blog articles from the same search (live blog type confirmed via Guardian API; those articles aggregate many unrelated updates and are not suitable for topic-by-topic comparison).
 - **Status:** Active
@@ -197,26 +204,26 @@ A running log of every project decision, so we can refer back to why things are 
 - **Alternatives rejected:** Wordcount threshold (a long feature article would be excluded; a short live blog summary would pass); including all returned articles from a keyword search (returns live blogs, opinion pieces, and off-topic results).
 - **Status:** Active
 
-### D-22: Guardian paragraphs cached in memory only
-- **Date:** 2026-10-05
-- **Decision:** Fetched Guardian article paragraphs are cached in memory for the lifetime of the process. They are never written to disk, the repo, or any snapshot file.
-- **Why:** A Cloud Run restart clears the cache, but that is acceptable -- the next request re-fetches from the API. Writing press text to disk would complicate copyright compliance.
-- **Alternatives rejected:** Snapshot-style JSON files for press articles (copyright risk; the in-memory cache is sufficient for single-instance Cloud Run).
+### D-22: Content-free press citation record, 23-hour cache (replaced)
+- **Date:** 2026-10-05, revised 2026-10-06
+- **Decision:** Guardian developer terms (Open Platform terms, section 5 Lifecycle) require replacing or deleting all Open Platform content at least every 24 hours, and they forbid editing that content. They also require attribution: headline, byline, and link. Fetched paragraphs stay in memory and expire after 23 hours, as does any compare_statements cache entry that contains press quotes. data/press_citations/ stores, per verified quote, the article url, headline, byline, paragraph id, published, retrieved_at, attributed_to, and a SHA-256 hash of the exact displayed quote. It stores no Guardian quote text. The only writer is `uv run python press.py --save-citations`. `uv run python press.py --verify-citations` re-fetches the articles and confirms each hash still matches a span of its paragraph. compare_statements does not read or write the file. Test mocks still use invented text only.
+- **Why:** Storing the quote, or trimming it with an ellipsis, keeps or edits Open Platform content past the terms. A hash can be checked against a fresh fetch without keeping the sentence. 23 hours is inside the 24-hour replacement window.
+- **Alternatives rejected:** Keeping quotes of 25 words or fewer (still Open Platform content); using the file as a fallback when the API is down (it would freeze an amended article); a process-lifetime cache (it can outlive 24 hours).
 - **Status:** Active
 
-### D-23: Guardian text never stored in the repo
-- **Date:** 2026-10-05
-- **Decision:** Guardian article bodyText is copyrighted and is never written to the repo, fixtures, or snapshots. Test fixtures for press tests use invented text only.
-- **Why:** Storing copyrighted article text in a public repo would be a copyright violation. Invented fixtures are sufficient to test extraction logic.
-- **Alternatives rejected:** Using real article excerpts in tests (copyright risk; unnecessary given that invented text can exercise all code paths).
+### D-23: Press spans over the word limit are dropped; rows show attribution (replaced)
+- **Date:** 2026-10-05, revised 2026-10-06
+- **Decision:** A press span must be 6 words up to the limit in D-48. A longer span is dropped and counted. There is no trim and no "...". Every press row shows the article headline, byline, and link. Official-side quotes take headline (display_name) and published from that source in config. Eval checks use paragraph id, label, attributed_to, and 1 to 3 keywords. They do not copy Guardian phrases.
+- **Why:** An ellipsis edits the sentence, which the developer terms forbid. Dropping the long span leaves the source untouched. Headline, byline, and link are the attribution the terms require.
+- **Alternatives rejected:** Trimming to 25 words plus "..." (that edits the content; see D-24, now replaced).
 - **Status:** Active
 
 ### D-24: Press spans trimmed at 25 words, never dropped for length
-- **Date:** 2026-10-05
-- **Decision:** Press spans returned by the model are trimmed to the first 25 words followed by "..." if they exceed 25 words. The row is never dropped for length alone. A prefix of a verified span is itself a verified substring of the source paragraph.
-- **Why:** Dropping rows for length would reduce coverage without improving accuracy. Trimming to 25 words keeps the UI readable while preserving verifiability.
-- **Alternatives rejected:** Dropping rows over 25 words (reduces coverage; the full span is still verifiable even if the displayed text is trimmed).
-- **Status:** Active
+- **Date:** 2026-10-05, replaced 2026-10-06
+- **Decision:** Withdrawn. Press spans are not trimmed. See D-23.
+- **Why:** The Guardian developer terms forbid altering Open Platform content. Adding "..." is an edit.
+- **Alternatives rejected:** Keeping the trim.
+- **Status:** Replaced
 
 ### D-25: compare_statements label set applies to every pair
 - **Date:** 2026-10-05
@@ -349,4 +356,53 @@ A running log of every project decision, so we can refer back to why things are 
 - **Decision:** `get_official_source` and `fetch_source_by_name` now share two internal helpers: `_try_live(config, source, required_anchors=None)` and `_try_snapshot(case_id, source_name, required_anchors=None)`. A live page counts as usable only if: HTTP 200, marker found, at least one paragraph extracted, and every required anchor found. If the live page returns 200 but fails any check, `live_changed=True`. `check_claim` passes `required_anchors=[checks_anchor]` so that a live page lacking the anchor falls back to snapshot. If snapshot also lacks the anchor, `fetch_source_by_name` returns `{"anchor_missing": True, ...}` and `check_claim` converts that to not_checkable with reason "anchor not found in live page or snapshot". `get_official_source` (meeting cases) passes `required_anchors=None`.
 - **Why:** The duplicate live-first logic in both functions was identical except for the anchor check. A single internal function reduces the surface area for bugs when the fetch validity rules change.
 - **Alternatives rejected:** Keeping separate functions (maintenance burden; any rule change must be applied twice); merging into one public function (meeting and claim-check cases have different call signatures and return shapes).
+- **Status:** Active
+
+### D-44: Press prompt version is separate from us vs china
+- **Date:** 2026-10-06
+- **Decision:** Press comparisons use a numbered-paragraph prompt, PROMPT_VERSION "7". The model returns a paragraph id and a span of 6 to 40 words (D-48). Each quote may be used in at most one row, and a quote may not be paired with a quote about a different event or commitment. If only one side has a quote, the label must be only_{that side}. A row without both quotes is never same, different_framing, or contradiction. attributed_to is required when the press quote reports what a named person said. "allies with China" and "the CCP was not an ally" can both be true, so that pair is different_framing, not contradiction. US vs China stays on prompt version "3". The v3 prompt text and the paragraph strings it receives were not changed when display_name and published were added.
+- **Why:** The press articles need paragraph ids that are unique across the two pieces (A1-P1, A2-P1). Changing the US vs China prompt would risk the rows that already pass.
+- **Alternatives rejected:** One prompt version for every pair (would resend the US vs China rows through a new prompt); searching the span in any paragraph (a span can be true of the wrong paragraph).
+- **Status:** Active
+
+### D-45: AI naming pairs differ by who is speaking
+- **Date:** 2026-10-06
+- **Decision:** For us vs china, AI naming stays different_framing: the US super intelligence agreement paired with the China-U.S. AI Dialogue (D-36, unchanged). For china vs press, the row is only_press. The Guardian line is about what Trump called the technology, not about the dialogue's name, so the pairing rule forbids joining them.
+- **Why:** Those are two items. Pairing them would repeat the broad-topic mistake D-37 already rejected.
+- **Alternatives rejected:** different_framing for china vs press (pairs a name Trump used with a dialogue China announced); contradiction (China's statement does not deny the wording).
+- **Status:** Active
+
+### D-46: China source is the Eight Deliverables statement only
+- **Date:** 2026-10-06
+- **Decision:** The China side is the MFA English "Eight Deliverables" statement (and its gov.cn and Embassy mirrors, then the snapshot). China's separate Xinhua talks readout is not a source. When attributed_to mentions Xinhua, code adds the source_note in D-49. The model does not write that sentence.
+- **Why:** The readout is a different document. Treating it as China's statement would make a press paraphrase look like the official text.
+- **Alternatives rejected:** Adding the Xinhua readout as another China source (it was not fetched or snapshotted as an official source); ignoring the attribution and labeling the row as China's position.
+- **Status:** Active
+
+### D-47: Press verification compares words, then displays the source text
+- **Date:** 2026-10-06
+- **Decision:** A press span is verified by comparing word sequences with punctuation removed: the same words, in the same order, at least 6 words, inside the named paragraph. On a match, the displayed quote is the exact substring of the source paragraph, never the model's text. Official quote verification is unchanged: exact substring after normalize_text, minimum 6 words (D-10).
+- **Why:** The model sometimes moves a comma inside a closing quotation mark. That is still the same words. Showing the model's text would display an edited sentence, which the Guardian developer terms forbid. Showing the source substring keeps the article's punctuation.
+- **Alternatives rejected:** Exact character match for press spans (drops a quote when only a comma moved); displaying the model's text after a word match (that can differ from the article); applying the word match to official quotes (D-10 stays exact).
+- **Status:** Active
+
+### D-48: Press span limit is 40 words
+- **Date:** 2026-10-06
+- **Decision:** A press span must be 6 to 40 words as returned. A longer span is dropped and counted with the reason "span over 40 words". Spans are never trimmed and never shown with "...". That instruction is in the press prompt. US vs China stays on version "3".
+- **Why:** The old 25-word cap was our own copyright caution, not a Guardian rule. Guardian developer terms forbid editing content, which is why a long span is dropped instead of cut. 40 words keeps a complete sentence that 25 often split.
+- **Alternatives rejected:** Keeping 25 words (it dropped WWII and other rows that were a single sentence); trimming at 40 words (that would edit the sentence).
+- **Status:** Active
+
+### D-49: Xinhua source_note is written by code
+- **Date:** 2026-10-06
+- **Decision:** If a press row's attributed_to mentions "Xinhua", code sets source_note to "Cites a Xinhua readout, which is not the China source used here." Otherwise source_note is null. The model never writes this sentence. The eval check is that the row has this exact source_note. Same pattern as D-39: fixed text from code, not from the model.
+- **Why:** The behavior moved from the model to code, so the check is deterministic, not looser. Asking the model to write the sentence produced a different reason on every run.
+- **Alternatives rejected:** Leaving the sentence in the model's reason (the check failed whenever the model put Xinhua only in attributed_to); dropping the check (that would hide whether the note is present).
+- **Status:** Active
+
+### D-50: Cloud Run reachability and the Guardian secret
+- **Date:** 2026-10-06
+- **Decision:** From Cloud Run in europe-west1, the White House, CMS, and the Guardian API all returned HTTP 200, and the secret file mount works. Secret guardian-secrets version 1 already exists. The default compute service account (655901547612-compute@developer.gserviceaccount.com) has secretAccessor. Phase G only needs to mount that secret (`--update-secrets=/secrets/guardian.toml=guardian-secrets:latest`) and set max-instances to 1. Before the mount, confirm the service runs as that default compute service account.
+- **Why:** The earlier deploy plan treated reachability and the secret as untested. Both are done. Recreating the secret or guessing the service account would be extra work.
+- **Alternatives rejected:** Creating a new secret (version 1 is already there); mounting the secret over /app/config/ (that would hide sources.toml and claims.toml).
 - **Status:** Active

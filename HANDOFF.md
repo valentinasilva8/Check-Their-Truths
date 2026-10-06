@@ -62,7 +62,7 @@ Key URLs:
 |---|---|---|---|
 | 1 | `list_cases()` | helper | done |
 | 2 | `get_official_source(case_id, source)` | external data | done |
-| 3 | `get_press_coverage(case_id)` | external API (Guardian) | NOT BUILT (Phase P). `compare_statements` currently returns "press side not available yet" for press. |
+| 3 | `get_press_coverage(case_id)` | external API (Guardian) | Built. Curated ids only. Paragraphs stay in memory. |
 | 4 | `compare_statements(case_id, topic, left="us", right="china")` | ORIGINAL | done for us vs china |
 | 5 | `check_claim(case_id, claim_id)` | ORIGINAL | done |
 
@@ -89,7 +89,7 @@ Key URLs:
 - Anchors AND markers contain no numbers. Regexes run only on the sentence containing the anchor (D-41).
 - `claimed_phrase` must be a substring of the post text, else `not_checkable` (D-35).
 - C3 cross-check: computed change must equal the CMS-stated change, else `not_checkable` with reason "stated and computed changes do not match".
-- Claim cards show the source plainly ("Checked against: White House fact sheet, Oct 2, 2026" + link), no editorial notes (D-40).
+- Claim cards show the source plainly ("Checked against: White House fact sheet, Oct 2, 2026" + link). The name and date come from display_name and published in config, not from the fetch time (D-40).
 
 **Fetching**
 - Tools only fetch URLs from config, never user or model input (D-16).
@@ -97,10 +97,12 @@ Key URLs:
 - Live fetches never overwrite snapshots. Only `python sources.py --refresh-snapshots` does.
 
 **Press (Phase P)**
-- Guardian text is NEVER written to the repo, fixtures, or snapshots. In-memory cache only. Test mocks use invented text (D-22, D-23).
-- Article IDs are curated in config. No runtime search (D-27). Live blogs excluded by API `type` field (D-21).
-- Press spans over 25 words are trimmed to the first 25 words plus "..." for display, never dropped for length (D-24).
-- Press rows carry `attributed_to` (D-32).
+- Full article text is never committed. Paragraphs are cached in memory and expire after 23 hours. compare_statements cache entries that contain press quotes expire after 23 hours (D-22).
+- `data/press_citations/` stores a hash of each verified quote, plus url, headline, byline, paragraph id, published, retrieved_at, and attributed_to. No quote text. Written only by `uv run python press.py --save-citations`. Checked by `uv run python press.py --verify-citations`, which re-fetches and confirms each hash. The file is not a fallback (D-22). Test mocks use invented text only.
+- Article IDs are curated in config. No runtime search (D-27). Live blogs excluded by API `type` field (D-21). Paragraph ids are A1-P1 for the first curated article and A2-P1 for the second.
+- A press span must be 6 to 40 words as returned. Longer spans are dropped and counted as "span over 40 words". There is no trim and no "..." (D-48, D-24 replaced). Verification compares words with punctuation removed, then displays the exact source substring (D-47). Official quotes stay on exact substring match (D-10).
+- Press comparisons use prompt version "7". US vs China stays on "3" (D-44). Every press row shows headline, byline, and link. Official quotes take display_name and published from the source in config. `attributed_to` is required when a named person is reported (D-32). If attributed_to mentions Xinhua, code sets source_note; the model does not write it (D-49).
+- The China side is the MFA Eight Deliverables statement only. A press row that cites a Xinhua readout must say that readout is not the China source used here (D-46).
 - API key: read lazily inside the press tool. `/secrets/guardian.toml` on Cloud Run, `config/secrets.toml` locally. Never an env var. Missing file returns "press side unavailable", never crashes (D-26).
 
 ## 7. Expected results
@@ -126,34 +128,25 @@ C3 context note: "CMS also states: If the Trump Administration had not taken act
 
 ## 8. Status (as of Oct 6, 2026)
 
-Committed and pushed on `feature/two-readouts`: Phase A through Phase M, including Phase M fixes (c8b6caf). 81 tests pass (`uv run pytest -q`).
+Committed and pushed on `feature/two-readouts`: Phase A through Phase M, including Phase M fixes (c8b6caf). Phase P (Guardian press side) is done.
 
-Next phase is Phase P (Guardian press coverage).
+Next is Phase E (frontend).
 
 ## 9. Next steps, in order
 
-1. **Resolve the test count, commit, push** the feature branch (not main).
-2. **Phase P (press):**
-   - Build `get_press_coverage(case_id)` (Guardian Open Platform API, `show-fields=body,headline,byline`, extract `<p>`).
-   - Replace the press stub in `compare_statements`. Give the model numbered paragraphs; it returns paragraph number + exact span; verify the span is in that paragraph.
-   - Before writing code, fetch both articles and PROPOSE expected EVAL rows for AI naming, Taiwan, and the weapons sale. The owner confirms them. Do not guess labels.
-   - Tests: mocked API with invented text, API 500 -> "press side unavailable", missing secrets file -> unavailable, 25-word trim with "...", paragraph numbering, span not in paragraph -> dropped.
-   - Note: most Guardian articles were published before the official statements came out.
-3. **Phase E (frontend, built in v0):**
+1. **Phase E (frontend, built in v0):**
    - Push the branch first. Point v0 at `feature/two-readouts`, never `main`. Do not run v0 and another coding tool on the branch at the same time.
    - Output must be plain HTML/CSS/JS served by FastAPI (one `index.html`), or static files FastAPI can serve. Not a separate Next.js deploy.
    - Everything renders from `tool_calls` in the `/chat` JSON, never from model prose. Give v0 real sample JSON (a compare_statements result with a term_check row, and a check_claim result with a context note).
    - Comparison view: side selector (US vs China, US vs Press, China vs Press), LIVE/SNAPSHOT badges, "N rows hidden because quotes could not be verified", term_check row, source links.
    - Claim cards: verdict badge (supported / imprecise / contradicted / not_checkable), rule and thresholds shown, numbers, arithmetic string, evidence quote, "Checked against" source line, separate Context box (only when context_note is not null), "excerpt" label on the post, "original link pending" while `original_url` is TODO.
-4. **Phase F:** README with 3 grader queries (one US vs China, one press, one Medicare), known limits (in-memory sessions, max-instances 1, hard-coded post excerpt, original link pending, Guardian articles predate official statements, Guardian key is non-commercial tier), next steps (discovery tool for new statements, automated claim extraction). Do NOT mention soybeans. `submission.json` with deploy_url and authors (confirm whether the assignment wants UNI or email).
-5. **Phase G (deploy):**
+2. **Phase F:** README with 3 grader queries (one US vs China, one press, one Medicare), known limits (in-memory sessions, max-instances 1, hard-coded post excerpt, original link pending, Guardian articles predate official statements, Guardian key is non-commercial tier), next steps (discovery tool for new statements, automated claim extraction). Do NOT mention soybeans. `submission.json` with deploy_url and authors (confirm whether the assignment wants UNI or email).
+3. **Phase G (deploy):**
+   Cloud Run reachability from europe-west1 was confirmed on Oct 6, 2026: the White House, CMS, and the Guardian API all returned 200, and the secret file mount works (D-50). Secret `guardian-secrets` version 1 already exists. The default compute service account `655901547612-compute@developer.gserviceaccount.com` already has `secretAccessor`. First confirm the service runs as that account. Then only:
    ```
-   gcloud secrets create guardian-secrets --project=valentinas-project-ieor4570 --replication-policy=automatic
-   gcloud secrets versions add guardian-secrets --project=valentinas-project-ieor4570 --data-file=config/secrets.toml
-   gcloud secrets add-iam-policy-binding guardian-secrets --project=valentinas-project-ieor4570 --member="serviceAccount:SERVICE_ACCOUNT_EMAIL" --role="roles/secretmanager.secretAccessor"
-   gcloud run services update gemini-web-tool-calling-git --project=valentinas-project-ieor4570 --region=europe-west1 --update-secrets=/secrets/guardian.toml=guardian-secrets:latest
+   gcloud run services update gemini-web-tool-calling-git --project=valentinas-project-ieor4570 --region=europe-west1 --update-secrets=/secrets/guardian.toml=guardian-secrets:latest --max-instances=1
    ```
-   Mount at `/secrets/guardian.toml`, NOT inside `/app/config/` (a secret volume would hide sources.toml and claims.toml). Set max-instances 1. Open a PR to main; the owner merges. After the auto-deploy, confirm the new revision still has the secret mounted. Test the live URL with a second Columbia account. Confirm cms.gov and the Guardian API are reachable from Cloud Run (untested). For one-off Cloud Run checks use a Dockerfile (`FROM python:3.12-slim`, `CMD ["python","-u","check.py"]`) run as a Cloud Run job with no command override.
+   Mount at `/secrets/guardian.toml`, NOT inside `/app/config/` (a secret volume would hide sources.toml and claims.toml). Open a PR to main; the owner merges. After the auto-deploy, confirm the new revision still has the secret mounted. Test the live URL with a second Columbia account.
 
 ## 10. Owner's open to-dos
 

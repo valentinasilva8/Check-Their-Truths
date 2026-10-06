@@ -21,6 +21,26 @@ without making any claim about terminology. Omission plus different wording is n
 | 人工智能 | YES | [x] |
 | 超级智能 | NO | [x] |
 
+## Press rows
+
+Checks use the paragraph id, the label, attributed_to, and one to three keywords.
+They do not copy article sentences. Press prompt version is 7 (D-44). US vs China stays on 3.
+
+| Topic | Pair | Label | Paragraph | Keywords | attributed_to |
+|---|---|---|---|---|---|
+| AI naming | us vs press | different_framing | A1-P14 | super intelligence | names Trump |
+| AI naming | china vs press | only_press | A1-P14 | super intelligence | names Trump |
+| Taiwan | us vs press | only_press | A2-P8 | Xinhua | Xi Jinping (via Xinhua readout) |
+| Taiwan | china vs press | only_press | A2-P8 | Xinhua | Xi Jinping (via Xinhua readout) |
+| Weapons sale | us vs press | only_press | A2-P1 | Perdue | names David Perdue |
+| Weapons sale | china vs press | only_press | A2-P1 | Perdue | names David Perdue |
+| WWII | us vs press | not contradiction | A2-P13 vs the US "side by side" line | side by side | |
+
+China vs press does not pair the naming line with the China-U.S. AI Dialogue (D-45).
+When attributed_to mentions Xinhua, the row's source_note is exactly "Cites a Xinhua readout, which is not the China source used here." Code writes that note; the model does not (D-49).
+A State Department denial row is allowed and not required.
+The WWII row must never be contradiction: "allies with China" and "the CCP was not an ally" can both be true (D-44).
+
 ## How to verify
 
 For each row, open the relevant snapshot file in `data/snapshots/` and confirm:

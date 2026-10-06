@@ -173,6 +173,8 @@ def test_c1_supported():
     result = check_claim(config, claims, "medicare_checks_2026_10", "C1")
 
     assert result["verdict"] == "supported"
+    assert result["checked_against"] == "Checked against: White House fact sheet, Oct 2, 2026"
+    assert result["source_date"] == "2026-10-02"
     assert result["numbers"]["official"] == "20000000"
     assert result["numbers"]["claimed"] == "20000000"
     assert result["evidence_quote"] is not None
@@ -213,6 +215,8 @@ def test_c3_contradicted():
     result = check_claim(config, claims, "medicare_checks_2026_10", "C3")
 
     assert result["verdict"] == "contradicted"
+    assert result["checked_against"] == "Checked against: CMS fact sheet, Nov 14, 2025"
+    assert result["source_date"] == "2025-11-14"
 
     nums = result["numbers"]
     assert nums["2025_premium"] == "185.00"

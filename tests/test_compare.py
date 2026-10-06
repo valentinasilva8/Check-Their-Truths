@@ -6,6 +6,7 @@ from unittest.mock import MagicMock
 import pytest
 
 import compare as _compare_mod
+import press as _press_mod
 from compare import _is_ai_topic, _normalize, _verify_quote, compare_statements
 from sources import load_config, load_snapshot
 
@@ -17,8 +18,10 @@ from sources import load_config, load_snapshot
 @pytest.fixture(autouse=True)
 def clear_cache():
     _compare_mod._cache.clear()
+    _press_mod._cache.clear()
     yield
     _compare_mod._cache.clear()
+    _press_mod._cache.clear()
 
 
 # ---------------------------------------------------------------------------
@@ -248,11 +251,342 @@ def test_compare_wrong_case_type():
 # Press side
 # ---------------------------------------------------------------------------
 
-def test_compare_press_not_yet_available():
+def _invented_press() -> dict:
+    """Press payload with invented sentences. Not from any published article."""
+    river = (
+        "The council agreed that the river project would start next spring without delay."
+    )
+    bridge = (
+        "A spokesperson said the bridge plan was postponed until the following year entirely."
+    )
+    return {
+        "case_id": "washington_2026_09",
+        "side": "press",
+        "articles": [
+            {
+                "article_id": "example/river-plan",
+                "headline": "Council sets the river schedule",
+                "byline": "Ada Example",
+                "url": "https://example.test/river",
+                "published": "2026-01-01T00:00:00Z",
+                "paragraphs": [
+                    {"id": "A1-P1", "text": river},
+                    {"id": "A1-P2", "text": bridge},
+                ],
+            }
+        ],
+    }
+
+
+def test_compare_press_unavailable(monkeypatch):
     config = load_config()
-    result = compare_statements(config, "washington_2026_09", "ai", "press", "china")
-    assert "error" in result
-    assert "not available yet" in result["error"]
+    monkeypatch.setattr(
+        "compare.get_press_coverage",
+        lambda config, case_id: {"error": "press side unavailable"},
+    )
+    result = compare_statements(config, "washington_2026_09", "ai", "us", "press")
+    assert result["error"] == "press side unavailable"
+
+
+def test_compare_press_span_must_be_in_named_paragraph(monkeypatch):
+    config = load_config()
+    monkeypatch.setattr("compare.get_press_coverage", lambda config, case_id: _invented_press())
+    bridge = _invented_press()["articles"][0]["paragraphs"][1]["text"]
+    fake_rows = [{
+        "topic": "bridge",
+        "label": "only_press",
+        "reason": "Only the press mentions the bridge plan.",
+        "left_quote": None,
+        "right_quote": bridge,
+        "left_paragraph_id": None,
+        "right_paragraph_id": "A1-P1",
+        "attributed_to": "Ada Example",
+    }]
+    monkeypatch.setattr("compare.litellm.completion", lambda **kw: _make_model_response(fake_rows))
+    result = compare_statements(config, "washington_2026_09", "bridge", "us", "press")
+    assert "error" not in result
+    assert result["dropped"] == 1
+    assert result["rows"] == []
+    assert any("A1-P1" in reason for reason in result["drop_reasons"])
+
+
+def test_compare_press_keeps_span_and_citation_fields(monkeypatch):
+    config = load_config()
+    monkeypatch.setattr("compare.get_press_coverage", lambda config, case_id: _invented_press())
+    river = "The council agreed that the river project would start next spring"
+    fake_rows = [{
+        "topic": "river",
+        "label": "only_press",
+        "reason": "Only the press mentions the river project.",
+        "left_quote": None,
+        "right_quote": river,
+        "left_paragraph_id": None,
+        "right_paragraph_id": "A1-P1",
+        "attributed_to": "Ada Example",
+    }]
+    monkeypatch.setattr("compare.litellm.completion", lambda **kw: _make_model_response(fake_rows))
+    result = compare_statements(config, "washington_2026_09", "river", "us", "press")
+    assert result["dropped"] == 0
+    assert len(result["rows"]) == 1
+    row = result["rows"][0]
+    assert row["right_paragraph_id"] == "A1-P1"
+    assert row["right_quote"] == river
+    assert row["right_headline"] == "Council sets the river schedule"
+    assert row["right_byline"] == "Ada Example"
+    assert row["right_url"] == "https://example.test/river"
+    assert row["right_published"] == "2026-01-01T00:00:00Z"
+    assert row["attributed_to"] == "Ada Example"
+    assert row["left_quote"] is None
+
+
+def test_compare_press_drops_span_over_40_words(monkeypatch):
+    config = load_config()
+    words = [f"token{i}" for i in range(41)]
+    paragraph = " ".join(words)
+    payload = _invented_press()
+    payload["articles"][0]["paragraphs"][0]["text"] = paragraph
+    monkeypatch.setattr("compare.get_press_coverage", lambda config, case_id: payload)
+    fake_rows = [{
+        "topic": "tokens",
+        "label": "only_press",
+        "reason": "Only the press has this long invented sentence.",
+        "left_quote": None,
+        "right_quote": paragraph,
+        "right_paragraph_id": "A1-P1",
+        "attributed_to": None,
+    }]
+    monkeypatch.setattr("compare.litellm.completion", lambda **kw: _make_model_response(fake_rows))
+    result = compare_statements(config, "washington_2026_09", "tokens", "us", "press")
+    assert result["rows"] == []
+    assert result["dropped"] == 1
+    assert any("span over 40 words" in reason for reason in result["drop_reasons"])
+    assert all("..." not in reason for reason in result["drop_reasons"])
+
+
+def test_press_one_quote_relabels_contradiction(monkeypatch):
+    """A row without both quotes cannot stay contradiction."""
+    config = load_config()
+    monkeypatch.setattr("compare.get_press_coverage", lambda config, case_id: _invented_press())
+    river = "The council agreed that the river project would start next spring"
+    fake_rows = [{
+        "topic": "river",
+        "label": "contradiction",
+        "reason": "Only one side has a quote.",
+        "left_quote": None,
+        "right_quote": river,
+        "left_paragraph_id": None,
+        "right_paragraph_id": "A1-P1",
+        "attributed_to": None,
+    }]
+    monkeypatch.setattr("compare.litellm.completion", lambda **kw: _make_model_response(fake_rows))
+    result = compare_statements(config, "washington_2026_09", "river_one_side", "us", "press")
+    assert result["dropped"] == 0
+    assert result["rows"][0]["label"] == "only_press"
+    assert result["rows"][0]["left_quote"] is None
+    assert result["rows"][0]["right_quote"] == river
+
+
+def test_press_two_quote_contradiction_is_not_relabeled(monkeypatch):
+    config = load_config()
+    monkeypatch.setattr("compare.get_press_coverage", lambda config, case_id: _invented_press())
+    snap = load_snapshot("washington_2026_09", "us_fact_sheet")
+    official = " ".join(snap["paragraphs"][0].split()[:8])
+    river = "The council agreed that the river project would start next spring"
+    fake_rows = [{
+        "topic": "river",
+        "label": "contradiction",
+        "reason": "These two claims cannot both be true.",
+        "left_quote": official,
+        "right_quote": river,
+        "left_paragraph_id": "P1",
+        "right_paragraph_id": "A1-P1",
+        "attributed_to": None,
+    }]
+    monkeypatch.setattr("compare.litellm.completion", lambda **kw: _make_model_response(fake_rows))
+    result = compare_statements(config, "washington_2026_09", "river_conflict", "us", "press")
+    assert result["dropped"] == 0
+    row = result["rows"][0]
+    assert row["label"] == "contradiction"
+    assert row["left_quote"] == official
+    assert row["right_quote"] == river
+    assert row["left_headline"] == "White House fact sheet"
+    assert row["left_published"] == "2026-09-25"
+    assert row["source_note"] is None
+    assert row["right_byline"] == "Ada Example"
+    assert row["right_url"] == "https://example.test/river"
+
+
+def test_press_attribution_is_not_rewritten(monkeypatch):
+    config = load_config()
+    payload = _invented_press()
+    payload["articles"][0]["paragraphs"][0]["text"] = (
+        "Pat Kim urged a delay, according to a readout from the invented wire service Xinhua."
+    )
+    monkeypatch.setattr("compare.get_press_coverage", lambda config, case_id: payload)
+    fake_rows = [{
+        "topic": "delay",
+        "label": "only_press",
+        "reason": "Only the press mentions the delay.",
+        "right_quote": "Pat Kim urged a delay, according to a readout",
+        "right_paragraph_id": "A1-P1",
+        "attributed_to": "Pat Kim",
+    }]
+    monkeypatch.setattr("compare.litellm.completion", lambda **kw: _make_model_response(fake_rows))
+    result = compare_statements(config, "washington_2026_09", "delay", "us", "press")
+    row = result["rows"][0]
+    assert row["attributed_to"] == "Pat Kim"
+    assert row["reason"] == "Only the press mentions the delay."
+    assert row["source_note"] is None
+
+
+def test_xinhua_attribution_adds_source_note(monkeypatch):
+    config = load_config()
+    payload = _invented_press()
+    payload["articles"][0]["paragraphs"][0]["text"] = (
+        "Pat Kim urged a delay, according to a readout from the invented wire service Xinhua."
+    )
+    monkeypatch.setattr("compare.get_press_coverage", lambda config, case_id: payload)
+    fake_rows = [{
+        "topic": "delay",
+        "label": "only_press",
+        "reason": "Only the press mentions the delay.",
+        "right_quote": "Pat Kim urged a delay, according to a readout",
+        "right_paragraph_id": "A1-P1",
+        "attributed_to": "Pat Kim (via Xinhua readout)",
+    }]
+    monkeypatch.setattr("compare.litellm.completion", lambda **kw: _make_model_response(fake_rows))
+    result = compare_statements(config, "washington_2026_09", "delay_note", "us", "press")
+    row = result["rows"][0]
+    assert row["reason"] == "Only the press mentions the delay."
+    assert row["source_note"] == (
+        "Cites a Xinhua readout, which is not the China source used here."
+    )
+
+
+def test_press_comma_inside_quote_displays_source_punctuation(monkeypatch):
+    config = load_config()
+    source = 'Reporters noted what he called "super intelligence", during the Washington visit yesterday.'
+    model = 'what he called "super intelligence," during the Washington visit yesterday'
+    expected = 'what he called "super intelligence", during the Washington visit yesterday'
+    payload = _invented_press()
+    payload["articles"][0]["paragraphs"][0]["text"] = source
+    monkeypatch.setattr("compare.get_press_coverage", lambda config, case_id: payload)
+    fake_rows = [{
+        "topic": "naming",
+        "label": "only_press",
+        "reason": "Only the press reports the name.",
+        "right_quote": model,
+        "right_paragraph_id": "A1-P1",
+        "attributed_to": "Ada Example",
+    }]
+    monkeypatch.setattr("compare.litellm.completion", lambda **kw: _make_model_response(fake_rows))
+    result = compare_statements(config, "washington_2026_09", "comma_case", "us", "press")
+    assert result["dropped"] == 0
+    assert result["rows"][0]["right_quote"] == expected
+    assert model not in result["rows"][0]["right_quote"]
+
+
+def test_press_one_changed_word_fails(monkeypatch):
+    config = load_config()
+    source = 'Reporters noted what he called "super intelligence", during the Washington visit yesterday.'
+    model = 'what he called "super intelligence," during the Beijing visit yesterday'
+    payload = _invented_press()
+    payload["articles"][0]["paragraphs"][0]["text"] = source
+    monkeypatch.setattr("compare.get_press_coverage", lambda config, case_id: payload)
+    fake_rows = [{
+        "topic": "naming",
+        "label": "only_press",
+        "reason": "Only the press reports the name.",
+        "right_quote": model,
+        "right_paragraph_id": "A1-P1",
+        "attributed_to": "Ada Example",
+    }]
+    monkeypatch.setattr("compare.litellm.completion", lambda **kw: _make_model_response(fake_rows))
+    result = compare_statements(config, "washington_2026_09", "changed_word", "us", "press")
+    assert result["rows"] == []
+    assert result["dropped"] == 1
+
+
+def test_official_quote_rejects_inserted_comma(monkeypatch):
+    """Official verification stays exact. A moved comma is not a press-style word match."""
+    config = load_config()
+    monkeypatch.setattr("compare.get_press_coverage", lambda config, case_id: _invented_press())
+    snap = load_snapshot("washington_2026_09", "us_fact_sheet")
+    official = " ".join(snap["paragraphs"][0].split()[:8])
+    bad = official.replace(" ", ", ", 1)
+    river = "The council agreed that the river project would start next spring"
+    fake_rows = [{
+        "topic": "river",
+        "label": "different_framing",
+        "reason": "The two sides use different words.",
+        "left_quote": bad,
+        "right_quote": river,
+        "left_paragraph_id": "P1",
+        "right_paragraph_id": "A1-P1",
+        "attributed_to": None,
+    }]
+    monkeypatch.setattr("compare.litellm.completion", lambda **kw: _make_model_response(fake_rows))
+    result = compare_statements(config, "washington_2026_09", "official_comma", "us", "press")
+    assert result["rows"] == []
+    assert result["dropped"] == 1
+
+
+def test_press_compare_cache_expires_after_23_hours(monkeypatch):
+    config = load_config()
+    monkeypatch.setattr("compare.get_press_coverage", lambda config, case_id: _invented_press())
+    river = "The council agreed that the river project would start next spring"
+    fake_rows = [{
+        "topic": "river",
+        "label": "only_press",
+        "reason": "Only the press mentions the river project.",
+        "right_quote": river,
+        "right_paragraph_id": "A1-P1",
+        "attributed_to": None,
+    }]
+    calls = {"n": 0}
+    clock = {"now": 1_000_000.0}
+
+    def fake_completion(**kwargs):
+        calls["n"] += 1
+        return _make_model_response(fake_rows)
+
+    monkeypatch.setattr("compare.litellm.completion", fake_completion)
+    monkeypatch.setattr("compare._now", lambda: clock["now"])
+    compare_statements(config, "washington_2026_09", "river_cache", "us", "press")
+    compare_statements(config, "washington_2026_09", "river_cache", "us", "press")
+    assert calls["n"] == 1
+    clock["now"] += 23 * 60 * 60 + 1
+    compare_statements(config, "washington_2026_09", "river_cache", "us", "press")
+    assert calls["n"] == 2
+
+
+def test_compare_press_does_not_write_citations(monkeypatch):
+    config = load_config()
+    monkeypatch.setattr("compare.get_press_coverage", lambda config, case_id: _invented_press())
+    before = []
+    if _press_mod.CITATIONS_DIR.exists():
+        before = sorted(path.name for path in _press_mod.CITATIONS_DIR.iterdir())
+
+    def forbid_save(*args, **kwargs):
+        raise AssertionError("compare_statements must not write citations")
+
+    monkeypatch.setattr("press.save_citations", forbid_save)
+    river = "The council agreed that the river project would start next spring"
+    fake_rows = [{
+        "topic": "river",
+        "label": "only_press",
+        "reason": "Only the press mentions the river project.",
+        "right_quote": river,
+        "right_paragraph_id": "A1-P1",
+        "attributed_to": None,
+    }]
+    monkeypatch.setattr("compare.litellm.completion", lambda **kw: _make_model_response(fake_rows))
+    result = compare_statements(config, "washington_2026_09", "river_no_write", "us", "press")
+    assert "error" not in result
+    after = []
+    if _press_mod.CITATIONS_DIR.exists():
+        after = sorted(path.name for path in _press_mod.CITATIONS_DIR.iterdir())
+    assert after == before
 
 
 # ---------------------------------------------------------------------------

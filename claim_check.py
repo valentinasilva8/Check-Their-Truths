@@ -1,6 +1,7 @@
 """claim_check: verify numerical claims from named posts against official sources."""
 
 import re
+from datetime import datetime
 from decimal import Decimal, ROUND_HALF_UP
 from pathlib import Path
 
@@ -457,16 +458,33 @@ def check_claim(config: dict, claims: dict, case_id: str, claim_id: str) -> dict
     source_url = source_result.get("url", "")
     live = source_result.get("live", False)
     live_changed = source_result.get("live_changed", False)
-    source_date = source_result.get("retrieved_at", "")[:10]
+    source_date = source_result.get("published") or ""
+    display_name = source_result.get("display_name") or source_name
 
     shared = (
         case_id, claim_id, claimed_phrase, post_info, claim, checks,
         paragraphs, source_name, source_url, source_date, live, live_changed,
     )
     if claim_type == "at_least":
-        return _run_at_least(*shared)
-    if claim_type == "approximately":
-        return _run_approximately(*shared)
-    if claim_type == "direction":
-        return _run_direction(*shared)
-    return {"error": f"Unknown claim_type '{claim_type}' for claim '{claim_id}'."}
+        result = _run_at_least(*shared)
+    elif claim_type == "approximately":
+        result = _run_approximately(*shared)
+    elif claim_type == "direction":
+        result = _run_direction(*shared)
+    else:
+        return {"error": f"Unknown claim_type '{claim_type}' for claim '{claim_id}'."}
+    if "error" not in result:
+        result["checked_against"] = _checked_against_line(display_name, source_date)
+    return result
+
+
+def _checked_against_line(display_name: str, published: str) -> str:
+    """D-40 line. Date is the statement date from config, not the fetch time."""
+    shown = published
+    try:
+        parsed = datetime.strptime(published, "%Y-%m-%d")
+    except ValueError:
+        parsed = None
+    if parsed is not None:
+        shown = f"{parsed.strftime('%b')} {parsed.day}, {parsed.year}"
+    return f"Checked against: {display_name}, {shown}"

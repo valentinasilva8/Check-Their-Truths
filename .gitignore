@@ -16,3 +16,6 @@ config/secrets.toml
 .Rhistory
 DESIGN.html
 spikes/
+
+# Real chat responses used while building the page. They can contain article text.
+frontend_samples/
