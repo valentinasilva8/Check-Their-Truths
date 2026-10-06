@@ -9,7 +9,7 @@ def test_home_page_and_assets_load():
     client = TestClient(app)
     page = client.get("/")
     assert page.status_code == 200
-    assert "Two Readouts" in page.text
+    assert "Check Their Truths" in page.text
     assert "/static/styles.css" in page.text
     assert "/static/app.js" in page.text
 

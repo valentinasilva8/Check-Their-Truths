@@ -57,6 +57,7 @@ A running log of every project decision, so we can refer back to why things are 
 | D-51 | 2026-10-06 | Evidence quotes are the anchor sentence, and tool errors tell the model what to do next | Active |
 | D-52 | 2026-10-06 | Guardian secret is mounted, max instances is 1, PR 1 is open, and answers render as Markdown | Active |
 | D-53 | 2026-10-06 | Comparison results carry source metadata, claim results carry the post text, and term_check carries a terms map | Active |
+| D-54 | 2026-10-06 | Display name changed to Check Their Truths (previously Two Readouts); internal names unchanged | Active |
 
 ---
 
@@ -429,4 +430,11 @@ A running log of every project decision, so we can refer back to why things are 
 - **Decision:** After the comparison model call, each compare_statements result includes left_source and right_source with display_name, published, url, live, and live_changed. The prompt and the cache key stay the same. check_claim includes post.verbatim_text from config. A term_check row includes terms, a map of 人工智能 and 超级智能 to true or false. The page reads that map and does not read the reason text.
 - **Why:** The page has to show dates, live or snapshot, the post with the claimed words highlighted, and the two Chinese terms. Those facts were either missing or only written inside a sentence.
 - **Alternatives rejected:** Changing the comparison prompt to ask for dates (the dates are already in config); parsing the reason sentence in the browser.
+- **Status:** Active
+
+### D-54: Display name is Check Their Truths
+- **Date:** 2026-10-06
+- **Decision:** Display name changed to Check Their Truths (previously Two Readouts) because the project now compares three sources and checks claims, and 'readout' is unfamiliar jargon. Internal names unchanged so the deploy URL stays stable.
+- **Why:** The old name described two official readouts. The project now also compares Guardian coverage and checks Medicare claims, and "readout" is jargon.
+- **Alternatives rejected:** Renaming the repo, the branch, the Cloud Run service, or the deploy URL.
 - **Status:** Active

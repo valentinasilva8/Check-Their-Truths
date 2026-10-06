@@ -1,6 +1,6 @@
 """Tools the chat agent can call.
 
-Two Readouts compares the official US and China statements about the
+Check Their Truths compares the official US and China statements about the
 September 2026 Trump-Xi meeting, compares those statements with Guardian
 coverage, and fact-checks three Medicare claims from a Trump post.
 

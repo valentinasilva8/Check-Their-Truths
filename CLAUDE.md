@@ -2,7 +2,7 @@
 
 This file provides guidance to Claude Code (claude.ai/code) when working with code in this repository.
 
-# Two Readouts
+# Check Their Truths
 
 ## What this project is
 A web chat agent for my Columbia Agentic AI class (solo project). For a given Trump-Xi meeting, it fetches the official US statement and China's official English statement, compares them topic by topic with verbatim quotes, and tracks dated commitments. Example finding: the White House says both leaders agreed to say "super intelligence" instead of "artificial intelligence", while China's statement names a "China-U.S. AI Dialogue", and China's Chinese original uses 人工智能 and not 超级智能.

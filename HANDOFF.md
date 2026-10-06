@@ -1,4 +1,4 @@
-# HANDOFF: Two Readouts (Agentic AI class project)
+# HANDOFF: Check Their Truths (Agentic AI class project)
 
 Read this file first. Then read CLAUDE.md, DESIGN.md, DECISIONS.md (D-01 to D-43), and EVAL.md in that order. DECISIONS.md is the source of truth when anything here disagrees with older text.
 

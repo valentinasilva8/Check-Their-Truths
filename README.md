@@ -1,6 +1,6 @@
-# Two Readouts
+# Check Their Truths
 
-Two Readouts compares the official US and China statements about the September 2026 Trump-Xi meeting, and it checks those statements against Guardian coverage. It also fact-checks three Medicare claims from a Trump post against White House and CMS numbers. The quotes are checked against the source before they are shown.
+Check Their Truths compares the official US and China statements about the September 2026 Trump-Xi meeting, and it checks those statements against Guardian coverage. It also fact-checks three Medicare claims from a Trump post against White House and CMS numbers. The quotes are checked against the source before they are shown.
 
 The app is deployed at https://gemini-web-tool-calling-git-jq4klbcf7q-ew.a.run.app
 
