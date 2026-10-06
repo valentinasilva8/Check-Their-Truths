@@ -32,7 +32,11 @@ _WORD_RE = re.compile(r"[A-Za-z0-9]+(?:['\u2019][A-Za-z0-9]+)*")
 # In-memory only. Values are (stored_at, result). Never written by get_press_coverage.
 _cache: dict = {}
 
-UNAVAILABLE = "press side unavailable"
+UNAVAILABLE = (
+    "press side unavailable. Do not invent Guardian text. "
+    "Tell the user The Guardian could not be loaded, or compare the US and China "
+    "statements with compare_statements."
+)
 
 # Topics recorded by the explicit citation command. Not read back at runtime.
 CITATION_TOPICS = ("", "AI naming", "taiwan", "weapons")
@@ -223,8 +227,9 @@ def get_press_coverage(config: dict, case_id: str, *, refresh: bool = False) -> 
     if case.get("type") != "meeting":
         return {
             "error": (
-                f"get_press_coverage requires a meeting case; "
-                f"'{case_id}' is type '{case.get('type')}'."
+                f"get_press_coverage only works on meeting cases; "
+                f"'{case_id}' is type '{case.get('type')}'. "
+                "Use check_claim for claim_check cases."
             )
         }
     article_ids = list(case.get("press_articles") or [])

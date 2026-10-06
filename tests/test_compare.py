@@ -282,10 +282,12 @@ def test_compare_press_unavailable(monkeypatch):
     config = load_config()
     monkeypatch.setattr(
         "compare.get_press_coverage",
-        lambda config, case_id: {"error": "press side unavailable"},
+        lambda config, case_id: {"error": _press_mod.UNAVAILABLE},
     )
     result = compare_statements(config, "washington_2026_09", "ai", "us", "press")
-    assert result["error"] == "press side unavailable"
+    assert result["error"] == _press_mod.UNAVAILABLE
+    assert "Do not invent Guardian text" in result["error"]
+    assert "compare_statements" in result["error"]
 
 
 def test_compare_press_span_must_be_in_named_paragraph(monkeypatch):

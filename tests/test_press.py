@@ -112,7 +112,9 @@ def test_api_500_is_unavailable(monkeypatch):
         lambda *args, **kwargs: _Response(500),
     )
     result = get_press_coverage(config, "washington_2026_09")
-    assert result["error"] == "press side unavailable"
+    assert result["error"].startswith("press side unavailable")
+    assert "Do not invent Guardian text" in result["error"]
+    assert "compare_statements" in result["error"]
     assert "test-key-not-real" not in json.dumps(result)
 
 
@@ -127,7 +129,9 @@ def test_missing_secrets_is_unavailable(monkeypatch):
     monkeypatch.setattr("press._load_api_key", lambda: None)
     monkeypatch.setattr("press.requests.get", fail_get)
     result = get_press_coverage(config, "washington_2026_09")
-    assert result["error"] == "press side unavailable"
+    assert result["error"].startswith("press side unavailable")
+    assert "Do not invent Guardian text" in result["error"]
+    assert "compare_statements" in result["error"]
     assert called["n"] == 0
 
 
@@ -143,7 +147,9 @@ def test_liveblog_is_excluded(monkeypatch):
     monkeypatch.setattr("press.requests.get", fake_get)
     monkeypatch.setattr("press._load_api_key", lambda: "test-key-not-real")
     result = get_press_coverage(config, "washington_2026_09")
-    assert result["error"] == "press side unavailable"
+    assert result["error"].startswith("press side unavailable")
+    assert "Do not invent Guardian text" in result["error"]
+    assert "compare_statements" in result["error"]
     assert ids  # config still has curated ids; they were excluded by type
 
 

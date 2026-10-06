@@ -54,6 +54,7 @@ A running log of every project decision, so we can refer back to why things are 
 | D-48 | 2026-10-06 | Press span limit is 40 words; longer spans are dropped, never trimmed | Active |
 | D-49 | 2026-10-06 | Xinhua source_note is written by code, not by the model | Active |
 | D-50 | 2026-10-06 | Cloud Run from europe-west1 can reach the White House, CMS, and the Guardian API; the Guardian secret is ready to mount | Active |
+| D-51 | 2026-10-06 | Evidence quotes are the anchor sentence, and tool errors tell the model what to do next | Active |
 
 ---
 
@@ -405,4 +406,11 @@ A running log of every project decision, so we can refer back to why things are 
 - **Decision:** From Cloud Run in europe-west1, the White House, CMS, and the Guardian API all returned HTTP 200, and the secret file mount works. Secret guardian-secrets version 1 already exists. The default compute service account (655901547612-compute@developer.gserviceaccount.com) has secretAccessor. Phase G only needs to mount that secret (`--update-secrets=/secrets/guardian.toml=guardian-secrets:latest`) and set max-instances to 1. Before the mount, confirm the service runs as that default compute service account.
 - **Why:** The earlier deploy plan treated reachability and the secret as untested. Both are done. Recreating the secret or guessing the service account would be extra work.
 - **Alternatives rejected:** Creating a new secret (version 1 is already there); mounting the secret over /app/config/ (that would hide sources.toml and claims.toml).
+- **Status:** Active
+
+### D-51: Sentence-length evidence and actionable tool errors
+- **Date:** 2026-10-06
+- **Decision:** check_claim evidence_quote is the sentence that contains the anchor, not the whole paragraph. C3's arithmetic string shows the monthly change and then the yearly change as 17.90 x 12. Every error a tool returns tells the model the next step, such as calling list_cases or using the other tool.
+- **Why:** A real Medicare answer quoted the deductible sentence next to the premium sentence. A tool error that only says what failed does not tell the model how to recover.
+- **Alternatives rejected:** Leaving the full paragraph (it mixes in numbers the claim does not use); keeping short errors such as "press side unavailable" with no next step.
 - **Status:** Active

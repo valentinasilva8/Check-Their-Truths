@@ -271,7 +271,12 @@ def _load_numbered_side(config: dict, case_id: str, side: str) -> tuple[dict | N
 
     loaded = get_official_source(config, case_id, side)
     if "error" in loaded:
-        return {"error": f"Could not load {side} statement: {loaded['error']}"}, None
+        return {
+            "error": (
+                f"Could not load {side} statement: {loaded['error']} "
+                "Do not invent that side's text."
+            )
+        }, None
     return None, _official_numbered(loaded)
 
 
@@ -364,7 +369,12 @@ def _compare_press(
     try:
         raw = _press_model_call(prompt)
     except Exception as e:
-        return {"error": f"Model call failed: {type(e).__name__}: {str(e)[:300]}"}
+        return {
+            "error": (
+                f"Model call failed: {type(e).__name__}: {str(e)[:300]}. "
+                "Do not invent a comparison. Tell the user the comparison could not be completed."
+            )
+        }
 
     raw = _strip_json_fence(raw)
     try:
@@ -372,7 +382,12 @@ def _compare_press(
         if not isinstance(raw_rows, list):
             raise ValueError("expected a JSON array")
     except (json.JSONDecodeError, ValueError) as e:
-        return {"error": f"Model returned invalid JSON: {e}. Raw response: {raw[:200]!r}"}
+        return {
+            "error": (
+                f"Model returned invalid JSON: {e}. Raw response: {raw[:200]!r}. "
+                "Do not invent rows. Tell the user the comparison could not be completed."
+            )
+        }
 
     for _ in range(2):
         if raw_rows:
@@ -533,24 +548,40 @@ def compare_statements(
     if case.get("type") != "meeting":
         return {
             "error": (
-                f"compare_statements requires a meeting case; "
-                f"'{case_id}' is type '{case.get('type')}'."
+                f"compare_statements only works on meeting cases; "
+                f"'{case_id}' is type '{case.get('type')}'. "
+                "Use check_claim for claim_check cases."
             )
         }
 
     for side_name, side_val in (("left", left), ("right", right)):
         if side_val not in ("us", "china", "press"):
-            return {"error": f"{side_name} must be 'us', 'china', or 'press', got '{side_val}'."}
+            return {
+                "error": (
+                    f"{side_name} must be 'us', 'china', or 'press', got '{side_val}'. "
+                    "Call compare_statements again with one of those three values."
+                )
+            }
 
     if "press" in (left, right):
         return _compare_press(config, case_id, topic, left, right)
 
     left_result = get_official_source(config, case_id, left)
     if "error" in left_result:
-        return {"error": f"Could not load {left} statement: {left_result['error']}"}
+        return {
+            "error": (
+                f"Could not load {left} statement: {left_result['error']} "
+                "Do not invent that side's text."
+            )
+        }
     right_result = get_official_source(config, case_id, right)
     if "error" in right_result:
-        return {"error": f"Could not load {right} statement: {right_result['error']}"}
+        return {
+            "error": (
+                f"Could not load {right} statement: {right_result['error']} "
+                "Do not invent that side's text."
+            )
+        }
 
     left_paras: list[str] = left_result["paragraphs"]
     right_paras: list[str] = right_result["paragraphs"]
@@ -572,7 +603,12 @@ def compare_statements(
         )
         raw = reply.choices[0].message.content
     except Exception as e:
-        return {"error": f"Model call failed: {type(e).__name__}: {str(e)[:300]}"}
+        return {
+            "error": (
+                f"Model call failed: {type(e).__name__}: {str(e)[:300]}. "
+                "Do not invent a comparison. Tell the user the comparison could not be completed."
+            )
+        }
 
     # Strip markdown fences if the model wraps the JSON
     raw = re.sub(r"^```(?:json)?\s*", "", raw.strip())
@@ -583,7 +619,12 @@ def compare_statements(
         if not isinstance(raw_rows, list):
             raise ValueError("expected a JSON array")
     except (json.JSONDecodeError, ValueError) as e:
-        return {"error": f"Model returned invalid JSON: {e}. Raw response: {raw[:200]!r}"}
+        return {
+            "error": (
+                f"Model returned invalid JSON: {e}. Raw response: {raw[:200]!r}. "
+                "Do not invent rows. Tell the user the comparison could not be completed."
+            )
+        }
 
     valid_labels = {
         "same",

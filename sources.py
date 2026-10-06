@@ -54,11 +54,15 @@ def get_sources_for_side(config: dict, case_id: str, side: str) -> list[dict]:
         raise ValueError(f"Case '{case_id}' not found. Call list_cases to see supported cases.")
     if case.get("type") != "meeting":
         raise ValueError(
-            f"Case '{case_id}' is type '{case.get('type')}', not 'meeting'. "
-            "get_official_source only works for meeting cases."
+            f"get_official_source only works on meeting cases; "
+            f"'{case_id}' is type '{case.get('type')}'. "
+            "Use check_claim for claim_check cases."
         )
     if side not in ("us", "china"):
-        raise ValueError(f"source must be 'us' or 'china', got '{side}'.")
+        raise ValueError(
+            f"source must be 'us' or 'china', got '{side}'. "
+            "Call get_official_source again with source 'us' or 'china'."
+        )
     sources = [
         s for s in case["sources"]
         if s["side"] == side and s.get("role") != "term_check_only"
@@ -403,8 +407,8 @@ def get_official_source(config: dict, case_id: str, side: str) -> dict:
 
     return {
         "error": (
-            f"All live sources failed for {side}/{case_id} and no snapshot exists. "
-            "Try again later."
+            f"Could not load the {side} statement for '{case_id}', and no saved copy exists. "
+            "Do not invent the text. Tell the user that side is unavailable and try again later."
         )
     }
 
@@ -429,14 +433,19 @@ def fetch_source_by_name(
     """
     case = config["cases"].get(case_id)
     if not case:
-        return {"error": f"Case '{case_id}' not found."}
+        return {"error": f"Unknown case_id '{case_id}'. Call list_cases to see valid IDs."}
 
     source = next(
         (s for s in case.get("sources", []) if s["name"] == source_name),
         None,
     )
     if source is None:
-        return {"error": f"Source '{source_name}' not found in case '{case_id}'."}
+        return {
+            "error": (
+                f"Source '{source_name}' is not configured for case '{case_id}'. "
+                "Do not invent numbers from this source. Tell the user the claim cannot be checked."
+            )
+        }
 
     live_result, live_changed = _try_live(config, source, required_anchors)
     if live_result:
@@ -461,8 +470,8 @@ def fetch_source_by_name(
 
     return {
         "error": (
-            f"Source '{source_name}' for case '{case_id}' is unavailable "
-            "and no snapshot exists."
+            f"Source '{source_name}' for case '{case_id}' is unavailable and no saved copy exists. "
+            "Do not invent the official numbers. Tell the user the source could not be loaded and try again later."
         )
     }
 

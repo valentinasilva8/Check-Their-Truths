@@ -9,6 +9,7 @@ import pytest
 from claim_check import (
     _build_context_note,
     _extract_number,
+    _extract_sentence,
     _find_paragraph,
     _normalize,
     _parse_number,
@@ -148,7 +149,10 @@ def test_claimed_phrase_not_in_post(monkeypatch):
         claims["posts"]["trump_truth_social_2026_10_02"]["verbatim_text"] = original_text
 
     assert result["verdict"] == "not_checkable"
-    assert result["reason"] == "claimed_phrase not found in post text"
+    assert result["reason"] == (
+        "claimed_phrase not found in post text. Do not invent a verdict. "
+        "Tell the user this phrase is not in the post excerpt."
+    )
 
 
 # ---------------------------------------------------------------------------
@@ -177,8 +181,11 @@ def test_c1_supported():
     assert result["source_date"] == "2026-10-02"
     assert result["numbers"]["official"] == "20000000"
     assert result["numbers"]["claimed"] == "20000000"
-    assert result["evidence_quote"] is not None
-    assert "20 million" in result["evidence_quote"]
+    assert result["evidence_quote"] == (
+        "Today, President Donald J. Trump announced that the federal government "
+        "will be making one-time payments of $90 per person to help more than "
+        "20 million enrollees pay for their Medicare Part B premiums."
+    )
     assert result["context_note"] is None
 
 
@@ -195,6 +202,11 @@ def test_c2_imprecise():
     assert result["numbers"]["official"] == "90.00"
     assert result["numbers"]["claimed"] == "100.00"
     assert result["numbers"]["pct_diff"] == "10.0%"
+    assert result["evidence_quote"] == (
+        "Today, President Donald J. Trump announced that the federal government "
+        "will be making one-time payments of $90 per person to help more than "
+        "20 million enrollees pay for their Medicare Part B premiums."
+    )
     assert result["context_note"] is None
 
 
@@ -224,17 +236,53 @@ def test_c3_contradicted():
     assert nums["monthly_change"] == "+17.90"
     assert nums["pct_change"] == "+9.7%"
     assert nums["annual_change"] == "214.80"
+    assert result["evidence_quote"] == (
+        "The standard monthly premium for Medicare Part B enrollees will be "
+        "$202.90 for 2026, an increase of $17.90 from $185.00 in 2025."
+    )
 
 
 def test_c3_arithmetic_string():
     config = _config()
     claims = _claims()
     result = check_claim(config, claims, "medicare_checks_2026_10", "C3")
-    arith = result["arithmetic"]
-    # Must contain the three key numbers
-    assert "202.90" in arith
-    assert "185.00" in arith
-    assert "17.90" in arith
+    assert result["arithmetic"] == (
+        "202.90 - 185.00 = +17.90 per month (+9.7% vs 2025); "
+        "17.90 x 12 = 214.80 per year"
+    )
+
+
+def test_c3_source_date_is_publication_date_not_retrieval_date():
+    config = _config()
+    claims = _claims()
+    result = check_claim(config, claims, "medicare_checks_2026_10", "C3")
+    cms = next(
+        source for source in config["cases"]["medicare_checks_2026_10"]["sources"]
+        if source["name"] == "cms_2026_premiums"
+    )
+    snap = load_snapshot("medicare_checks_2026_10", "cms_2026_premiums")
+    assert cms["published"] == "2025-11-14"
+    assert result["source_date"] == cms["published"]
+    assert result["source_date"] != snap["retrieved_at"][:10]
+
+
+def test_sentence_splitter_keeps_donald_j_trump():
+    expected = (
+        "Today, President Donald J. Trump announced that the federal government "
+        "will be making one-time payments of $90 per person to help more than "
+        "20 million enrollees pay for their Medicare Part B premiums."
+    )
+    headed = "IMPROVING MEDICARE FOR SENIORS: " + expected
+    followed = expected + " The deductible rose the next year."
+    assert _extract_sentence("one-time payments of", expected) == expected
+    assert _extract_sentence("one-time payments of", headed) == expected
+    assert _extract_sentence("one-time payments of", followed) == expected
+    assert _extract_sentence("spoke next", "Dr. Smith spoke next. Then the hearing ended.") == (
+        "Dr. Smith spoke next."
+    )
+    assert _extract_sentence("plan held", "Mr. Jones waited. The U.S. plan held.") == (
+        "The U.S. plan held."
+    )
 
 
 def test_c3_context_note_present():

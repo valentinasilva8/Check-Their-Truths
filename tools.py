@@ -172,14 +172,9 @@ TOOLS = [
         "function": {
             "name": "check_claim",
             "description": (
-                "Fact-check a specific numerical claim from a named post against "
-                "official source data. Verifies the claimed_phrase is a substring "
-                "of the post text. Applies the claim_type rule (at_least, "
-                "approximately, direction) using Python Decimal arithmetic. Returns "
-                "verdict (supported, imprecise, contradicted, not_checkable), "
-                "numbers dict, arithmetic string, evidence quote, and optional "
-                "context_note. Use list_cases to see available claim_check cases "
-                "and their claim IDs. Claim_check cases only."
+                "Use this to fact-check one Medicare claim from the October 2026 post. "
+                "The verdict and the arithmetic are computed in code. Do not calculate them yourself. "
+                "Do not use this for the Trump-Xi meeting. Use compare_statements for that."
             ),
             "parameters": {
                 "type": "object",
@@ -187,14 +182,16 @@ TOOLS = [
                     "case_id": {
                         "type": "string",
                         "description": (
-                            "Claim_check case ID from list_cases, "
-                            "e.g. 'medicare_checks_2026_10'."
+                            "A claim_check case id from list_cases. "
+                            "The only one is medicare_checks_2026_10. "
+                            "Do not pass a meeting case id."
                         ),
                     },
                     "claim_id": {
                         "type": "string",
                         "description": (
-                            "Claim ID within the case, e.g. 'C1', 'C2', 'C3'."
+                            "Which claim to check. Must be C1 (how many seniors), "
+                            "C2 (the payment amount), or C3 (whether premiums fell)."
                         ),
                     },
                 },
@@ -207,9 +204,9 @@ TOOLS = [
         "function": {
             "name": "list_cases",
             "description": (
-                "List all supported cases. Returns case IDs, types "
-                "(meeting or claim_check), names, and dates. Call this first "
-                "if you are unsure which case IDs are available."
+                "Use this when you do not yet know which case id to pass to another tool. "
+                "Do not use it as the answer by itself. It returns each case id, its type "
+                "(meeting or claim_check), its name, and its dates. It takes no arguments."
             ),
             "parameters": {"type": "object", "properties": {}, "required": []},
         },
@@ -219,38 +216,46 @@ TOOLS = [
         "function": {
             "name": "compare_statements",
             "description": (
-                "Compare two sides of a meeting case topic by topic. "
-                "left and right can be 'us', 'china', or 'press'. "
-                "Returns rows labeled same, different_framing, contradiction, "
-                "only_{left}, or only_{right}. Each row has a reason and verified "
-                "verbatim quotes. For the AI topic on washington_2026_09, also "
-                "reports whether the Chinese original contains 人工智能 and/or "
-                "超级智能. topic='' compares all topics (capped at 12 rows). "
-                "Meeting cases only."
+                "Use this to compare two sides of the Trump-Xi meeting. "
+                "Do not use it for Medicare claims. Use check_claim for those. "
+                "Do not use it when the user only wants the raw statement or the articles. "
+                "Quotes in the result have already been checked against the source. "
+                "Do not add quotes of your own."
             ),
             "parameters": {
                 "type": "object",
                 "properties": {
                     "case_id": {
                         "type": "string",
-                        "description": "Meeting case ID from list_cases.",
+                        "description": (
+                            "A meeting case id from list_cases. "
+                            "The only one is washington_2026_09. "
+                            "Do not pass a claim_check case id."
+                        ),
                     },
                     "topic": {
                         "type": "string",
                         "description": (
-                            "Topic to compare, e.g. 'AI', 'trade', 'military'. "
-                            "Empty string compares all topics."
+                            "The subject to compare, such as 'military', 'AI', or 'trade'. "
+                            "Use an empty string to cover every topic. "
+                            "An empty topic returns at most 12 rows."
                         ),
                     },
                     "left": {
                         "type": "string",
                         "enum": ["us", "china", "press"],
-                        "description": "Left side: 'us', 'china', or 'press'.",
+                        "description": (
+                            "The first side. Must be 'us', 'china', or 'press'. "
+                            "'press' is The Guardian. Do not pass any other value."
+                        ),
                     },
                     "right": {
                         "type": "string",
                         "enum": ["us", "china", "press"],
-                        "description": "Right side: 'us', 'china', or 'press'.",
+                        "description": (
+                            "The second side. Must be 'us', 'china', or 'press'. "
+                            "'press' is The Guardian. Do not pass any other value."
+                        ),
                     },
                 },
                 "required": ["case_id"],
@@ -262,21 +267,28 @@ TOOLS = [
         "function": {
             "name": "get_official_source",
             "description": (
-                "Retrieve the official statement for one side of a meeting case. "
-                "Returns paragraphs, source URL, retrieved_at, and a live flag. "
-                "Only works for meeting cases (not claim_check)."
+                "Use this when the user wants the text of an official US or China statement. "
+                "Do not use it to compare two sides. Use compare_statements for that. "
+                "Do not use it for Guardian articles or for Medicare claims."
             ),
             "parameters": {
                 "type": "object",
                 "properties": {
                     "case_id": {
                         "type": "string",
-                        "description": "Meeting case ID from list_cases, e.g. 'washington_2026_09'.",
+                        "description": (
+                            "A meeting case id from list_cases. "
+                            "The only one is washington_2026_09. "
+                            "Do not pass a claim_check case id."
+                        ),
                     },
                     "source": {
                         "type": "string",
                         "enum": ["us", "china"],
-                        "description": "Which side to retrieve: 'us' or 'china'.",
+                        "description": (
+                            "Which official side to load. Must be 'us' or 'china'. "
+                            "Do not pass 'press'."
+                        ),
                     },
                 },
                 "required": ["case_id", "source"],
@@ -288,17 +300,22 @@ TOOLS = [
         "function": {
             "name": "get_press_coverage",
             "description": (
-                "Fetch Guardian press coverage for a meeting case. Returns headline, "
-                "byline, url, published date, and numbered paragraphs for each curated "
-                "article. Paragraph ids look like A1-P1. Does not search. Returns an "
-                "error if the press side is unavailable. Meeting cases only."
+                "Use this when the user wants the Guardian articles themselves. "
+                "Do not use it to compare those articles with an official statement. "
+                "Use compare_statements with 'press' for that. "
+                "Do not use it for Medicare claims. It does not search. "
+                "It loads the two curated articles."
             ),
             "parameters": {
                 "type": "object",
                 "properties": {
                     "case_id": {
                         "type": "string",
-                        "description": "Meeting case ID from list_cases, e.g. 'washington_2026_09'.",
+                        "description": (
+                            "A meeting case id from list_cases. "
+                            "The only one is washington_2026_09. "
+                            "Do not pass a claim_check case id."
+                        ),
                     },
                 },
                 "required": ["case_id"],
@@ -320,8 +337,19 @@ TOOL_MAP = {
 def run_tool(name: str, args: dict) -> str:
     """Run one tool call. Models invent tool names and arguments; never let that crash the loop."""
     if name not in TOOL_MAP:
-        return json.dumps({"error": f"Unknown tool '{name}'. Available: {list(TOOL_MAP)}"})
+        return json.dumps({
+            "error": (
+                f"Unknown tool '{name}'. Do not invent tool names. "
+                "Call one of: list_cases, get_official_source, get_press_coverage, "
+                "compare_statements, check_claim."
+            )
+        })
     try:
         return TOOL_MAP[name](**args)
     except TypeError as e:
-        return json.dumps({"error": f"Bad arguments for {name}: {e}"})
+        return json.dumps({
+            "error": (
+                f"Bad arguments for {name}: {e}. "
+                "Check the required arguments and call the tool again."
+            )
+        })

@@ -31,11 +31,37 @@ def _find_paragraph(anchor: str, paragraphs: list[str]) -> str | None:
     return None
 
 
+def _split_sentences(paragraph: str) -> list[str]:
+    """Split on sentence endings. Initials and a few abbreviations are not endings.
+
+    A single capital initial such as "J." and the abbreviations "U.S.", "Mr.",
+    and "Dr." stay inside the sentence. An all-caps label before a colon, such
+    as "IMPROVING MEDICARE FOR SENIORS:", is not part of the sentence after it.
+    """
+    kept_dot = "\uE000"
+    heading_break = "\uE001"
+    text = paragraph.strip()
+    text = re.sub(r"\b([A-Z])\.(?=\s+[A-Z])", lambda m: m.group(1) + kept_dot, text)
+    text = re.sub(r"\b(Mr|Mrs|Ms|Dr)\.(?=\s)", lambda m: m.group(1) + kept_dot, text)
+    text = re.sub(r"\bU\.S\.(?=\s)", lambda m: "U" + kept_dot + "S" + kept_dot, text)
+    text = re.sub(
+        r"(?:^|(?<=[.!?]\s))([A-Z][A-Z0-9 &'/-]{2,}):\s+",
+        lambda m: m.group(1) + "." + heading_break,
+        text,
+    )
+    parts = re.split(r"(?<=[.!?])\s+|" + heading_break, text)
+    sentences = []
+    for part in parts:
+        sentence = part.replace(kept_dot, ".").strip()
+        if sentence:
+            sentences.append(sentence)
+    return sentences
+
+
 def _extract_sentence(anchor: str, paragraph: str) -> str | None:
     """Return the sentence in paragraph containing anchor, with trailing period."""
-    parts = re.split(r"(?<=[.!?])\s+", paragraph.strip())
     norm_anchor = _normalize(anchor)
-    for part in parts:
+    for part in _split_sentences(paragraph):
         if norm_anchor in _normalize(part):
             sentence = part.strip()
             if sentence and sentence[-1] not in ".!?":
@@ -81,7 +107,7 @@ def _extract_number(
 ) -> tuple[Decimal | None, str | None]:
     """Find anchor paragraph, scope to the sentence containing anchor, extract number.
 
-    Returns (number, paragraph). Returns (None, None) when anchor is not found.
+    Returns (number, sentence). Returns (None, None) when anchor is not found.
     Returns (None, paragraph) when anchor is found but regex does not match.
     Scoping to the sentence prevents regexes from matching numbers in adjacent
     sentences of the same paragraph (D-41).
@@ -94,7 +120,8 @@ def _extract_number(
         return None, para
     m = re.search(regex, _normalize(sentence))
     if m:
-        return _parse_number(m.group(1)), para
+        # The quote shown to the user is the sentence, not the whole paragraph.
+        return _parse_number(m.group(1)), sentence
     return None, para
 
 
@@ -206,9 +233,11 @@ def _run_at_least(
     if official is None:
         return _not_checkable(
             case_id, claim_id, claimed_phrase, post_info, "at_least",
-            "anchor sentence not found in source"
+            "anchor sentence not found in source. Do not invent the official number. "
+            "Tell the user this claim cannot be checked."
             if evidence_para is None
-            else "number not found via regex in source paragraph",
+            else "number not found via regex in source paragraph. Do not invent the official number. "
+            "Tell the user this claim cannot be checked.",
         )
 
     verdict = verdict_at_least(official, claimed_value)
@@ -254,9 +283,11 @@ def _run_approximately(
     if official is None:
         return _not_checkable(
             case_id, claim_id, claimed_phrase, post_info, "approximately",
-            "anchor sentence not found in source"
+            "anchor sentence not found in source. Do not invent the official number. "
+            "Tell the user this claim cannot be checked."
             if evidence_para is None
-            else "number not found via regex in source paragraph",
+            else "number not found via regex in source paragraph. Do not invent the official number. "
+            "Tell the user this claim cannot be checked.",
         )
 
     official = official.quantize(Decimal("0.01"))
@@ -312,23 +343,27 @@ def _run_direction(
     if before is None:
         return _not_checkable(
             case_id, claim_id, claimed_phrase, post_info, "direction",
-            "anchor sentence not found in source"
+            "anchor sentence not found in source. Do not invent the official number. "
+            "Tell the user this claim cannot be checked."
             if evidence_para is None
-            else "before value not found via regex in source paragraph",
+            else "before value not found via regex in source paragraph. Do not invent the official number. "
+            "Tell the user this claim cannot be checked.",
         )
 
     after_val, _ = _extract_number(anchor, regex_after, paragraphs)
     if after_val is None:
         return _not_checkable(
             case_id, claim_id, claimed_phrase, post_info, "direction",
-            "after value not found via regex in source paragraph",
+            "after value not found via regex in source paragraph. Do not invent the official number. "
+            "Tell the user this claim cannot be checked.",
         )
 
     stated_change, _ = _extract_number(anchor, regex_stated, paragraphs)
     if stated_change is None:
         return _not_checkable(
             case_id, claim_id, claimed_phrase, post_info, "direction",
-            "stated change not found via regex in source paragraph",
+            "stated change not found via regex in source paragraph. Do not invent the official number. "
+            "Tell the user this claim cannot be checked.",
         )
 
     # Cross-check: computed change must equal stated change (D-35)
@@ -337,7 +372,8 @@ def _run_direction(
     if computed != stated:
         return _not_checkable(
             case_id, claim_id, claimed_phrase, post_info, "direction",
-            f"stated and computed changes do not match: computed {computed}, stated {stated}",
+            f"stated and computed changes do not match: computed {computed}, stated {stated}. "
+            "Do not invent the official number. Tell the user this claim cannot be checked.",
         )
 
     verdict = verdict_direction(claimed_direction, before, after_val)
@@ -361,8 +397,8 @@ def _run_direction(
         else "no change"
     )
     arithmetic = (
-        f"{after_val} - {before} = {monthly_str} "
-        f"({pct_str} per month, {sign}{annual_str} per year)"
+        f"{after_val} - {before} = {monthly_str} per month ({pct_str} vs 2025); "
+        f"{abs_monthly} x 12 = {annual_str} per year"
     )
     reason = (
         f"The Part B monthly premium {direction_desc}d from ${before} to ${after_val}. "
@@ -413,8 +449,8 @@ def check_claim(config: dict, claims: dict, case_id: str, claim_id: str) -> dict
     if case.get("type") != "claim_check":
         return {
             "error": (
-                f"check_claim requires a claim_check case; "
-                f"'{case_id}' is type '{case.get('type')}'. "
+                f"check_claim only works on claim_check cases; "
+                f"'{case_id}' is a meeting case. "
                 "Use compare_statements for meeting cases."
             )
         }
@@ -422,12 +458,22 @@ def check_claim(config: dict, claims: dict, case_id: str, claim_id: str) -> dict
     case_claims = claims.get("claims", {}).get(case_id, {})
     claim = case_claims.get(claim_id)
     if not claim:
-        return {"error": f"Claim '{claim_id}' not found in case '{case_id}'."}
+        return {
+            "error": (
+                f"Unknown claim_id '{claim_id}' in case '{case_id}'. "
+                "For medicare_checks_2026_10 the claim ids are C1, C2, and C3."
+            )
+        }
 
     post_id = claim.get("post")
     post = claims.get("posts", {}).get(post_id)
     if not post:
-        return {"error": f"Post '{post_id}' not found in claims.toml."}
+        return {
+            "error": (
+                f"Post '{post_id}' is missing from the config. "
+                "Do not invent the post. Tell the user this claim cannot be checked."
+            )
+        }
 
     claimed_phrase = claim.get("claimed_phrase", "")
     post_info = _post_info(post)
@@ -436,7 +482,8 @@ def check_claim(config: dict, claims: dict, case_id: str, claim_id: str) -> dict
     if claimed_phrase not in post.get("verbatim_text", ""):
         return _not_checkable(
             case_id, claim_id, claimed_phrase, post_info, claim_type,
-            "claimed_phrase not found in post text",
+            "claimed_phrase not found in post text. Do not invent a verdict. "
+            "Tell the user this phrase is not in the post excerpt.",
         )
 
     checks = claim.get("checks", {})
@@ -447,11 +494,17 @@ def check_claim(config: dict, claims: dict, case_id: str, claim_id: str) -> dict
         config, case_id, source_name, required_anchors=required_anchors
     )
     if "error" in source_result:
-        return {"error": f"Could not fetch source '{source_name}': {source_result['error']}"}
+        return {
+            "error": (
+                f"Could not fetch source '{source_name}': {source_result['error']} "
+                "Do not invent the official numbers."
+            )
+        }
     if source_result.get("anchor_missing"):
         return _not_checkable(
             case_id, claim_id, claimed_phrase, post_info, claim_type,
-            "anchor not found in live page or snapshot",
+            "anchor not found in live page or snapshot. Do not invent the official number. "
+            "Tell the user the source no longer contains the sentence needed to check this claim.",
         )
 
     paragraphs = source_result["paragraphs"]
@@ -472,7 +525,12 @@ def check_claim(config: dict, claims: dict, case_id: str, claim_id: str) -> dict
     elif claim_type == "direction":
         result = _run_direction(*shared)
     else:
-        return {"error": f"Unknown claim_type '{claim_type}' for claim '{claim_id}'."}
+        return {
+            "error": (
+                f"Unknown claim_type '{claim_type}' for claim '{claim_id}'. "
+                "Do not guess a verdict. Tell the user this claim is not set up to be checked."
+            )
+        }
     if "error" not in result:
         result["checked_against"] = _checked_against_line(display_name, source_date)
     return result
