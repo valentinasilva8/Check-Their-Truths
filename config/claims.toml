@@ -44,11 +44,9 @@ claimed_phrase = "over 20 MILLION wonderful Seniors"
 
 [claims.medicare_checks_2026_10.C1.checks]
 source = "wh_medicare_fact_sheet"
-anchor = "TODO"
-# regex captures the count as a number word or integer.
-# claim_check.py converts word form ("20 million" -> 20000000) before comparing.
-# Phase M test: test_million_word_parsing.
-regex = "TODO"
+anchor = "one-time payments of $90 per person to help more than 20 million enrollees"
+# Captures "20 million" as a number-word string; claim_check.py converts to 20000000.
+regex = "more than ([\\d,]+ million) enrollees"
 label = "senior_enrollment_count"
 claimed_value = 20000000
 unit = "count"
@@ -65,9 +63,9 @@ claimed_phrase = "nearly $100"
 
 [claims.medicare_checks_2026_10.C2.checks]
 source = "wh_medicare_fact_sheet"
-anchor = "TODO"
-# regex captures the dollar amount as a plain number without the $ sign
-regex = "TODO"
+anchor = "one-time payments of $90 per person to help more than 20 million enrollees"
+# Captures "90" from "payments of $90 per person".
+regex = "payments of \\$([\\d,]+) per person"
 label = "payment_per_senior_usd"
 claimed_value = "100.00"
 unit = "USD"
@@ -84,26 +82,25 @@ claimed_phrase = "which we have already reduced by significant amounts"
 
 [claims.medicare_checks_2026_10.C3.checks]
 source = "cms_2026_premiums"
-# One anchor sentence contains all three numbers: 2025 premium, 2026 premium,
-# and the stated increase. All three regexes extract from this single sentence.
-anchor = "TODO"
-# Captures the 2025 premium as a plain number (no $ sign)
-regex_before = "TODO"
-# Captures the 2026 premium as a plain number (no $ sign)
-regex_after = "TODO"
-# Captures the stated increase CMS names in the same sentence.
+# CMS paragraph: "The standard monthly premium for Medicare Part B enrollees will be
+# $202.90 for 2026, an increase of $17.90 from $185.00 in 2025."
+# All three regexes extract from this single sentence.
+anchor = "will be $202.90 for 2026, an increase of $17.90 from $185.00"
+# Captures "185.00" -- the 2025 premium (the "before" value).
+regex_before = "from \\$([\\d.]+) in 2025"
+# Captures "202.90" -- the 2026 premium (the "after" value).
+regex_after = "will be \\$([\\d.]+) for 2026"
+# Captures "17.90" -- the CMS-stated increase.
 # Code verifies computed (after - before) matches stated; mismatch -> not_checkable (D-35).
-regex_stated_change = "TODO"
+regex_stated_change = "increase of \\$([\\d.]+) from"
 claimed_direction = "decrease"
 label = "part_b_monthly_premium"
 unit = "USD"
 
 [claims.medicare_checks_2026_10.C3.context_note_check]
 source = "cms_2026_premiums"
-# Target: the CMS sentence stating the Part B premium would have been about $11
-# per month higher without the skin substitute payment policy change. This is the
-# administration's best counterpoint to the direction verdict: the premium
-# increased, but less than it would have without intervention. If present:
-# context_note cites this sentence. If absent: context_note = null, reason
-# includes "sentence not found in source".
-anchor = "TODO"
+# CMS paragraph [20]: "If the Trump Administration had not taken action to address
+# unprecedented spending on skin substitutes, the Part B premium increase would have
+# been about $11 more a month. However, due to changes..."
+# The anchor identifies the sentence that provides nuance for the direction verdict.
+anchor = "the Part B premium increase would have been about $11 more a month"

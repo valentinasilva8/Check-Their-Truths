@@ -71,7 +71,8 @@ name = "wh_medicare_fact_sheet"
 side = "us"
 language = "en"
 url = "https://www.whitehouse.gov/fact-sheets/2026/10/fact-sheet-president-donald-j-trump-announces-medicare-improvement-fund-payments-for-seniors/"
-marker = "TODO"
+selector = "div.entry-content"
+marker = "Medicare Improvement Fund"
 priority = 1
 
 [[cases.medicare_checks_2026_10.sources]]
@@ -79,5 +80,6 @@ name = "cms_2026_premiums"
 side = "us"
 language = "en"
 url = "https://www.cms.gov/newsroom/fact-sheets/2026-medicare-parts-b-premiums-deductibles"
-marker = "TODO"
+selector = "div.field--name-body"
+marker = "$202.90"
 priority = 1

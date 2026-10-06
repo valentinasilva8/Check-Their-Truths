@@ -2,6 +2,7 @@
 
 import json
 
+from claim_check import check_claim as _check_claim, load_claims
 from compare import compare_statements as _compare_statements
 from sources import get_official_source as _fetch_official_source, load_config
 
@@ -59,7 +60,56 @@ def compare_statements(
     return json.dumps(result, ensure_ascii=False)
 
 
+def check_claim(case_id: str, claim_id: str) -> str:
+    """Fact-check a specific claim from a named post against official source data.
+
+    Verifies the claimed_phrase is a substring of the post text, then applies
+    the claim_type rule (at_least, approximately, direction) using Decimal
+    arithmetic. Returns verdict, numbers, arithmetic string, and optional
+    context_note. Claim_check cases only.
+    """
+    config = load_config()
+    claims = load_claims()
+    result = _check_claim(config, claims, case_id, claim_id)
+    return json.dumps(result, ensure_ascii=False)
+
+
 TOOLS = [
+    {
+        "type": "function",
+        "function": {
+            "name": "check_claim",
+            "description": (
+                "Fact-check a specific numerical claim from a named post against "
+                "official source data. Verifies the claimed_phrase is a substring "
+                "of the post text. Applies the claim_type rule (at_least, "
+                "approximately, direction) using Python Decimal arithmetic. Returns "
+                "verdict (supported, imprecise, contradicted, not_checkable), "
+                "numbers dict, arithmetic string, evidence quote, and optional "
+                "context_note. Use list_cases to see available claim_check cases "
+                "and their claim IDs. Claim_check cases only."
+            ),
+            "parameters": {
+                "type": "object",
+                "properties": {
+                    "case_id": {
+                        "type": "string",
+                        "description": (
+                            "Claim_check case ID from list_cases, "
+                            "e.g. 'medicare_checks_2026_10'."
+                        ),
+                    },
+                    "claim_id": {
+                        "type": "string",
+                        "description": (
+                            "Claim ID within the case, e.g. 'C1', 'C2', 'C3'."
+                        ),
+                    },
+                },
+                "required": ["case_id", "claim_id"],
+            },
+        },
+    },
     {
         "type": "function",
         "function": {
@@ -147,6 +197,7 @@ TOOL_MAP = {
     "list_cases": list_cases,
     "get_official_source": get_official_source,
     "compare_statements": compare_statements,
+    "check_claim": check_claim,
 }
 
 

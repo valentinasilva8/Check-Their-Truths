@@ -183,12 +183,22 @@ def _extract_mfa_chinese(soup: BeautifulSoup) -> list[str]:
     return _texts_from(soup.body or soup, language="zh")
 
 
+def _extract_cms(soup: BeautifulSoup) -> list[str]:
+    # CMS fact sheets use Drupal's field--name-body content region.
+    container = soup.find("div", class_=lambda c: c and "field--name-body" in c.split())
+    if container:
+        return _texts_from(container)
+    return _texts_from(soup.body or soup)
+
+
 _EXTRACTORS: dict[str, callable] = {
     "us_fact_sheet": lambda soup: _extract_whitehouse(soup),
+    "wh_medicare_fact_sheet": lambda soup: _extract_whitehouse(soup),
     "china_mfa_english": lambda soup: _extract_trs(soup),
     "china_govcn_mirror": lambda soup: _extract_govcn(soup),
     "china_embassy_mirror": lambda soup: _extract_trs(soup),
     "china_mfa_chinese_original": lambda soup: _extract_mfa_chinese(soup),
+    "cms_2026_premiums": lambda soup: _extract_cms(soup),
 }
 
 
@@ -316,6 +326,79 @@ def get_official_source(config: dict, case_id: str, side: str) -> dict:
         "error": (
             f"All live sources failed for {side}/{case_id} and no snapshot exists. "
             "Try again later."
+        )
+    }
+
+
+# ---------------------------------------------------------------------------
+# Claim-check source loader (fetch by name, not by side)
+# ---------------------------------------------------------------------------
+
+def fetch_source_by_name(config: dict, case_id: str, source_name: str) -> dict:
+    """Fetch a named source for any case type. Live-first with snapshot fallback.
+
+    Used by check_claim where sources are identified by name rather than by side.
+    Returns an error dict if the source cannot be found in config or fetched/loaded.
+    """
+    case = config["cases"].get(case_id)
+    if not case:
+        return {"error": f"Case '{case_id}' not found."}
+
+    source = next(
+        (s for s in case.get("sources", []) if s["name"] == source_name),
+        None,
+    )
+    if source is None:
+        return {"error": f"Source '{source_name}' not found in case '{case_id}'."}
+
+    url = source["url"]
+    marker = source.get("marker", "")
+    lang = source.get("language", "en")
+    any_live_changed = False
+
+    if url.startswith("http") and marker != "TODO":
+        try:
+            resp = fetch_source(url, config)
+        except (requests.RequestException, ValueError):
+            resp = None
+
+        if resp is not None and resp.status_code == 200:
+            decoded = resp.content.decode("utf-8", errors="replace")
+            if marker and marker not in decoded:
+                any_live_changed = True
+            else:
+                paragraphs = extract_paragraphs(resp.content, source_name, lang)
+                if paragraphs:
+                    return {
+                        "source_name": source_name,
+                        "url": url,
+                        "retrieved_at": datetime.now(NY_TZ).isoformat(),
+                        "live": True,
+                        "live_changed": False,
+                        "language": lang,
+                        "paragraphs": paragraphs,
+                    }
+                any_live_changed = True
+
+    snap = load_snapshot(case_id, source_name)
+    if snap:
+        result = {
+            "source_name": source_name,
+            "url": snap.get("url", url),
+            "retrieved_at": snap.get("retrieved_at", ""),
+            "live": False,
+            "live_changed": any_live_changed,
+            "language": snap.get("language", lang),
+            "paragraphs": snap["paragraphs"],
+        }
+        if any_live_changed:
+            result["live_changed_note"] = "live page changed or unavailable; showing snapshot"
+        return result
+
+    return {
+        "error": (
+            f"Source '{source_name}' for case '{case_id}' is unavailable "
+            "and no snapshot exists."
         )
     }
 
