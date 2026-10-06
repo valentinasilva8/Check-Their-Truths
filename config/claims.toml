@@ -1,0 +1,99 @@
+# Fact-check claims for the medicare_checks_2026_10 case.
+#
+# claim_type controls which rule claim_check.py applies:
+#   at_least     -- official >= claimed_value -> supported; else contradicted
+#   approximately -- |official - claimed_value| / claimed_value:
+#                    <= 5%  -> supported
+#                    <= 25% -> imprecise
+#                    > 25%  -> contradicted
+#   direction    -- sign(official_change) matches claimed_direction -> supported;
+#                   zero change -> contradicted; opposite sign -> contradicted
+#
+# Fields marked "TODO" are confirmed during Phase M feasibility check.
+# verbatim_text and original_url for posts: never invented; left as "TODO" until
+# manually verified.
+
+# ---------------------------------------------------------------------------
+# C1: Enrollment count claim (at_least)
+# ---------------------------------------------------------------------------
+
+[claims.medicare_checks_2026_10.C1]
+claim_id = "C1"
+claim_type = "at_least"
+speaker = "TODO"
+date = "TODO"
+platform = "TODO"
+verbatim_text = "TODO"
+original_url = "TODO"
+quoted_by = ["TODO"]
+
+[claims.medicare_checks_2026_10.C1.checks]
+source = "wh_medicare_fact_sheet"
+anchor = "TODO"
+# regex must capture the enrollment count as a plain integer or decimal
+regex = "TODO"
+label = "senior_enrollment_count"
+# claimed_value in same unit as the extracted number (individual seniors)
+claimed_value = 20000000
+unit = "count"
+
+# ---------------------------------------------------------------------------
+# C2: Per-senior savings claim (approximately)
+# ---------------------------------------------------------------------------
+
+[claims.medicare_checks_2026_10.C2]
+claim_id = "C2"
+claim_type = "approximately"
+speaker = "TODO"
+date = "TODO"
+platform = "TODO"
+verbatim_text = "TODO"
+original_url = "TODO"
+quoted_by = ["TODO"]
+
+[claims.medicare_checks_2026_10.C2.checks]
+source = "wh_medicare_fact_sheet"
+anchor = "TODO"
+# regex must capture the dollar amount as a plain number (no $ sign)
+regex = "TODO"
+label = "savings_per_senior_usd"
+# "nearly $100" -> claimed_value = 100; official = 90; 10% difference -> imprecise
+claimed_value = "100"
+unit = "USD"
+
+# ---------------------------------------------------------------------------
+# C3: Premium direction claim (direction)
+# Truth Social post text hard-coded verbatim; original_url pending manual lookup.
+# ---------------------------------------------------------------------------
+
+[claims.medicare_checks_2026_10.C3]
+claim_id = "C3"
+claim_type = "direction"
+speaker = "Donald J. Trump"
+date = "TODO"
+platform = "Truth Social"
+verbatim_text = "TODO"
+original_url = "TODO"
+quoted_by = ["TODO"]
+
+[claims.medicare_checks_2026_10.C3.checks]
+source = "cms_2026_premiums"
+# Two anchor sentences needed: one containing the 2025 premium, one the 2026 premium.
+# claim_check.py extracts both, computes the change, and applies the direction rule.
+anchor_before = "TODO"
+anchor_after = "TODO"
+# Each regex captures a plain dollar amount (e.g. r"\$(\d+\.\d{2})")
+regex_before = "TODO"
+regex_after = "TODO"
+claimed_direction = "decrease"
+label = "part_b_monthly_premium"
+# Expected extracted values (filled in Phase M after feasibility check):
+#   before: 185.00, after: 202.90, monthly_change: +17.90
+#   annual_change: 214.80, pct_change: +9.7%, annual_net_of_payment: 124.80
+
+[claims.medicare_checks_2026_10.C3.context_note_check]
+source = "cms_2026_premiums"
+# Sentence explaining why the premium rose (e.g. skin substitute spending).
+# If present: context_note cites it. If absent: context_note = null,
+# reason includes "sentence not found in source".
+anchor = "TODO"

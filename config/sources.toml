@@ -1,10 +1,23 @@
-# Official statements for the Trump-Xi meeting in Washington, Sept 23-25, 2026.
-# Verified Oct 5, 2026: us_fact_sheet, china_mfa_english, and china_govcn_mirror
-# returned HTTP 200 with the expected content from Cloud Run (europe-west1).
+# Two Readouts source configuration.
+#
+# Top-level key is "cases". Each case has a "type" field:
+#   "meeting"      -- US vs China official statement comparison
+#   "claim_check"  -- fact-check numerical claims against official sources
+#
+# Verified Oct 5, 2026 from Cloud Run europe-west1:
+#   us_fact_sheet, china_mfa_english, china_govcn_mirror returned HTTP 200.
+# Phase B renames config["meetings"] -> config["cases"] in sources.py.
+# Until then, sources.py reads from the "meetings" key; the "cases" key
+# contains new cases not yet accessed by any code.
 
 [meetings.washington_2026_09]
+type = "meeting"
 name = "Xi Jinping state visit to the United States"
 dates = "2026-09-23 to 2026-09-25"
+press_articles = [
+    "us-news/2026/sep/24/xi-jinping-trump-china-cooperation-thucydides-trap",
+    "world/2026/sep/28/trump-xi-jinping-china-buy-weapons",
+]
 
 [[meetings.washington_2026_09.sources]]
 name = "us_fact_sheet"
@@ -45,3 +58,30 @@ language = "zh"
 url = "https://www.mfa.gov.cn/zyxw/202609/t20260926_12031616.shtml"
 markers = ["人工智能", "超级智能"]
 role = "term_check_only"
+
+# ---------------------------------------------------------------------------
+# Medicare claim check case.
+# URLs and anchor sentences are placeholders; confirmed during Phase M
+# feasibility check before any snapshot is taken.
+# ---------------------------------------------------------------------------
+
+[cases.medicare_checks_2026_10]
+type = "claim_check"
+name = "Medicare Part B premium claims, October 2026"
+dates = "2026-10-01"
+
+[[cases.medicare_checks_2026_10.sources]]
+name = "wh_medicare_fact_sheet"
+side = "us"
+language = "en"
+url = "TODO"
+marker = "TODO"
+priority = 1
+
+[[cases.medicare_checks_2026_10.sources]]
+name = "cms_2026_premiums"
+side = "us"
+language = "en"
+url = "TODO"
+marker = "TODO"
+priority = 1

@@ -20,6 +20,21 @@ A running log of every project decision, so we can refer back to why things are 
 | D-14 | 2026-10-05 | Dropped rows reported to the user, never hidden silently | Active |
 | D-15 | 2026-10-05 | Neutrality: report differences, never judge who is right | Active |
 | D-16 | 2026-10-05 | Safety: tools only fetch URLs from config/sources.toml | Active |
+| D-17 | 2026-10-05 | HTML parsing: beautifulsoup4 with lxml parser | Active |
+| D-18 | 2026-10-05 | Two cases: washington_2026_09 (meeting) and medicare_checks_2026_10 (claim_check) | Active |
+| D-19 | 2026-10-05 | Medicare claim check approved; Guardian Medicare search returned false positives only | Active |
+| D-20 | 2026-10-05 | Guardian API approved for washington_2026_09 press side; two curated article IDs | Active |
+| D-21 | 2026-10-05 | Live blogs excluded from press_articles (wordcount >= 4000) | Active |
+| D-22 | 2026-10-05 | Guardian paragraphs cached in memory only, never written to disk | Active |
+| D-23 | 2026-10-05 | Guardian bodyText never stored in repo; press test fixtures use invented text only | Active |
+| D-24 | 2026-10-05 | Press spans over 25 words trimmed with "..."; rows never dropped for length | Active |
+| D-25 | 2026-10-05 | Echo count 0 confirmed for both curated articles | Active |
+| D-26 | 2026-10-05 | Guardian API key loaded lazily; /secrets/guardian.toml on Cloud Run, config/secrets.toml locally | Active |
+| D-27 | 2026-10-05 | Press articles are curated in config, never searched at runtime | Active |
+| D-28 | 2026-10-05 | check_claim replaces track_commitments | Active |
+| D-29 | 2026-10-05 | Truth Social post text hard-coded in claims.toml; original_url = "TODO" | Active |
+| D-30 | 2026-10-05 | Python Decimal arithmetic for dollar amounts; expressions stored as strings | Active |
+| D-31 | 2026-10-05 | Claim rules general (at_least, approximately, direction); verdicts never in config | Active |
 
 ---
 
@@ -128,9 +143,114 @@ A running log of every project decision, so we can refer back to why things are 
 - **Alternatives rejected:** None
 - **Status:** Active
 
+### D-17: HTML parsing library
+- **Date:** 2026-10-05
+- **Decision:** Use beautifulsoup4 with the lxml parser for HTML extraction.
+- **Why:** Real government HTML from whitehouse.gov and the Chinese MFA sites has inconsistent structure and occasional malformed markup. lxml handles these more robustly than stdlib html.parser.
+- **Alternatives rejected:** stdlib html.parser (less robust on real-world government HTML; no CSS selector support).
+- **Status:** Active
+
 ### D-16: URL safety
 - **Date:** 2026-10-05
 - **Decision:** Tools only fetch URLs listed in config/sources.toml. They never fetch URLs from user input or model output.
 - **Why:** Allowing arbitrary URL fetches would let a user (or a prompt-injected model response) cause the server to make outbound requests to arbitrary hosts.
 - **Alternatives rejected:** Allowlist checked at runtime from user input (adds complexity without benefit; config/ is the right place for trusted URLs).
+- **Status:** Active
+
+### D-18: Two cases
+- **Date:** 2026-10-05
+- **Decision:** The app covers exactly two cases: `washington_2026_09` (type = "meeting") and `medicare_checks_2026_10` (type = "claim_check"). The top-level key in sources.toml is `cases`, with a `type` field per case. The `meetings` key used in Phase A is renamed to `cases` in Phase B when sources.py is updated.
+- **Why:** A single config key with a type field is cleaner than separate `[meetings.*]` and `[cases.*]` sections, and it keeps list_cases trivial to implement.
+- **Alternatives rejected:** Separate top-level keys per case type (redundant structure; list_cases would need to merge them).
+- **Status:** Active
+
+### D-19: Medicare claim check approved
+- **Date:** 2026-10-05
+- **Decision:** The Medicare Part B premium case is approved for Phase M. Three claims (C1 at_least, C2 approximately, C3 direction) will be checked against official CMS and WH sources. Anchor sentences and exact URLs are confirmed during the Phase M feasibility check; sources.toml and claims.toml use "TODO" placeholders until then.
+- **Why:** The Guardian Medicare search returned only false positives (no articles about the specific premium claims), confirming there is no viable press side for this case. The checkable numbers are unambiguous in the official sources.
+- **Alternatives rejected:** Soybeans case (Guardian search returned only keyword false positives; no article mentioned the claimed figures).
+- **Status:** Active
+
+### D-20: Guardian API approved for washington_2026_09
+- **Date:** 2026-10-05
+- **Decision:** The Guardian API is approved as a press side for the washington_2026_09 case. Two curated article IDs are stored in config/sources.toml. The API is only called for those IDs; no search queries are issued at runtime.
+- **Why:** Both curated articles are substantive (1075 and 613 words), mention the key AI naming and Taiwan topics, and have echo count 0 (no verbatim repetition of WH text), confirming independent coverage.
+- **Alternatives rejected:** Live blog articles (5749 and 8127 words; mix of many unrelated topics; not suitable for topic-by-topic comparison).
+- **Status:** Active
+
+### D-21: Live blogs excluded from press_articles
+- **Date:** 2026-10-05
+- **Decision:** Articles with wordcount >= 4000 are treated as live blogs and excluded from press_articles. Curated IDs are manually reviewed before being added to config.
+- **Why:** Live blog articles aggregate many unrelated updates into a single URL. A comparison against them would produce noisy, hard-to-attribute rows.
+- **Alternatives rejected:** Including all returned articles from a keyword search (returns live blogs, opinion pieces, and off-topic results).
+- **Status:** Active
+
+### D-22: Guardian paragraphs cached in memory only
+- **Date:** 2026-10-05
+- **Decision:** Fetched Guardian article paragraphs are cached in memory for the lifetime of the process. They are never written to disk, the repo, or any snapshot file.
+- **Why:** A Cloud Run restart clears the cache, but that is acceptable -- the next request re-fetches from the API. Writing press text to disk would complicate copyright compliance.
+- **Alternatives rejected:** Snapshot-style JSON files for press articles (copyright risk; the in-memory cache is sufficient for single-instance Cloud Run).
+- **Status:** Active
+
+### D-23: Guardian text never stored in the repo
+- **Date:** 2026-10-05
+- **Decision:** Guardian article bodyText is copyrighted and is never written to the repo, fixtures, or snapshots. Test fixtures for press tests use invented text only.
+- **Why:** Storing copyrighted article text in a public repo would be a copyright violation. Invented fixtures are sufficient to test extraction logic.
+- **Alternatives rejected:** Using real article excerpts in tests (copyright risk; unnecessary given that invented text can exercise all code paths).
+- **Status:** Active
+
+### D-24: Press spans trimmed at 25 words, never dropped for length
+- **Date:** 2026-10-05
+- **Decision:** Press spans returned by the model are trimmed to the first 25 words followed by "..." if they exceed 25 words. The row is never dropped for length alone. A prefix of a verified span is itself a verified substring of the source paragraph.
+- **Why:** Dropping rows for length would reduce coverage without improving accuracy. Trimming to 25 words keeps the UI readable while preserving verifiability.
+- **Alternatives rejected:** Dropping rows over 25 words (reduces coverage; the full span is still verifiable even if the displayed text is trimmed).
+- **Status:** Active
+
+### D-25: Echo count confirmed at 0
+- **Date:** 2026-10-05
+- **Decision:** Both curated Guardian articles have 0 echo sentences from the WH fact sheet, confirmed by 8-gram overlap. This is a one-time check; it is not repeated at runtime.
+- **Why:** A non-zero echo count would mean the press article was largely reprinting official text, making the press side redundant. Zero confirms independent coverage.
+- **Alternatives rejected:** None
+- **Status:** Active
+
+### D-26: Guardian API key loaded lazily
+- **Date:** 2026-10-05
+- **Decision:** The Guardian API key is read lazily inside the press tool, never at import time or app startup. The app reads `/secrets/guardian.toml` on Cloud Run (mounted via Secret Manager) or `config/secrets.toml` locally (gitignored). If neither file exists, the press tool returns `{"error": "press side unavailable"}` rather than raising an exception.
+- **Why:** Lazy loading means the app starts and serves other tools even if the secrets file is absent. Mounting at `/secrets/guardian.toml` (not inside `/app/config/`) avoids shadowing `config/sources.toml` and `config/claims.toml`.
+- **Alternatives rejected:** Environment variable (not version-controllable; harder to audit); eager load at startup (crashes the whole app if the secrets file is missing).
+- **Status:** Active
+
+### D-27: Press articles are curated, never searched
+- **Date:** 2026-10-05
+- **Decision:** Article IDs for the press side are hand-curated and stored in `press_articles` in config/sources.toml. The app never issues a Guardian search query at runtime. Adding a new meeting requires adding curated IDs manually after review.
+- **Why:** Runtime search returns live blogs, opinion pieces, and off-topic results. Curation ensures only substantive, relevant articles appear in the comparison.
+- **Alternatives rejected:** Runtime keyword search (unpredictable results; live blogs and false positives confirmed in the feasibility spike).
+- **Status:** Active
+
+### D-28: check_claim replaces track_commitments
+- **Date:** 2026-10-05
+- **Decision:** The original `track_commitments` tool (honest status based on today's date) is replaced by `check_claim` (fact-check a specific numerical claim against an official source with verified arithmetic).
+- **Why:** check_claim is more verifiable (code checks the number, not the model), more original, and satisfies the assignment's "at least 1 original tool" requirement more clearly. track_commitments as originally designed would require hand-curating commitment dates, which is high-maintenance for minimal benefit.
+- **Alternatives rejected:** Keeping track_commitments alongside check_claim (scope creep; two original tools are not required).
+- **Status:** Active
+
+### D-29: Truth Social post text hard-coded in claims.toml
+- **Date:** 2026-10-05
+- **Decision:** The verbatim text of the Trump Truth Social post used as claim C3 is stored in `config/claims.toml`. The `original_url` field is set to "TODO" pending manual lookup. The UI and README disclose that the post text is hard-coded and the URL is pending.
+- **Why:** Truth Social does not support programmatic access. Hard-coding the verbatim text is the only option. A "TODO" URL is honest; an invented URL would violate the rule against inventing URLs.
+- **Alternatives rejected:** Fetching the post at runtime (no API); omitting the post and using a speech transcript instead (Truth Social post is more checkable because it makes a specific, unambiguous claim).
+- **Status:** Active
+
+### D-30: Python Decimal arithmetic for all dollar amounts
+- **Date:** 2026-10-05
+- **Decision:** All dollar arithmetic in claim_check.py uses `decimal.Decimal` to avoid floating-point errors. Arithmetic expressions are generated as strings by code (not by the model) and stored in the result for transparency.
+- **Why:** `185.00 + 17.90` in float arithmetic can produce `202.89999...`. Decimal gives exact results. Storing the expression string lets the UI show how numbers were derived.
+- **Alternatives rejected:** Float arithmetic (rounding errors in dollar amounts); asking the model to compute the arithmetic (model arithmetic is unreliable and unverifiable).
+- **Status:** Active
+
+### D-31: Claim rules are general, dispatched by claim_type
+- **Date:** 2026-10-05
+- **Decision:** Each claim in claims.toml has a `claim_type` field: `at_least`, `approximately`, or `direction`. claim_check.py implements one named function per type. No verdict string ever appears in config. `direction("decrease", 0)` returns "contradicted" (zero change does not confirm a decrease).
+- **Why:** General rules are testable with synthetic numbers independent of the specific claims. Keeping verdicts out of config prevents anyone from hard-coding a desired outcome.
+- **Alternatives rejected:** Per-claim verdict logic in code (not reusable; harder to test); including expected verdicts in config (would make the tool a lookup, not a computation).
 - **Status:** Active
