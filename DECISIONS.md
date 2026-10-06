@@ -247,9 +247,9 @@ A running log of every project decision, so we can refer back to why things are 
 
 ### D-30: Python Decimal arithmetic for all dollar amounts
 - **Date:** 2026-10-05
-- **Decision:** All dollar arithmetic in claim_check.py uses `decimal.Decimal` to avoid floating-point errors. Arithmetic expressions are generated as strings by code (not by the model) and stored in the result for transparency.
-- **Why:** `185.00 + 17.90` in float arithmetic can produce `202.89999...`. Decimal gives exact results. Storing the expression string lets the UI show how numbers were derived.
-- **Alternatives rejected:** Float arithmetic (rounding errors in dollar amounts); asking the model to compute the arithmetic (model arithmetic is unreliable and unverifiable).
+- **Decision:** All dollar arithmetic in claim_check.py uses `decimal.Decimal` to avoid floating-point errors. Arithmetic expressions are generated as strings by code (not by the model) and stored in the result for transparency. `pct_change` is rounded to one decimal place using `ROUND_HALF_UP` (for example, 9.675% rounds to 9.7%).
+- **Why:** `185.00 + 17.90` in float arithmetic can produce `202.89999...`. Decimal gives exact results. Storing the expression string lets the UI show how numbers were derived. ROUND_HALF_UP matches the conventional rounding expectation for displayed percentages.
+- **Alternatives rejected:** Float arithmetic (rounding errors in dollar amounts); asking the model to compute the arithmetic (model arithmetic is unreliable and unverifiable); ROUND_HALF_EVEN (less intuitive for percentages displayed to users).
 - **Status:** Active
 
 ### D-31: Claim rules are general, dispatched by claim_type
