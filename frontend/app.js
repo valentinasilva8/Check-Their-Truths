@@ -1,7 +1,7 @@
 const SAMPLES = [
-  "Did Trump accurately describe the Medicare payments and premiums?",
-  "What did The Guardian report that the official statements left out?",
-  "How do the US and China statements differ on military crisis communication?",
+  "compare what the US and China said about trump's last meeting with xi.",
+  "is trump telling the truth about medicare?",
+  "what did the guardian catch about trump's xi meeting that the white house left out?",
 ];
 
 const SIDE_NAME = {
