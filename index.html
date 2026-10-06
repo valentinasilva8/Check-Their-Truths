@@ -3,7 +3,9 @@
     <head>
         <meta charset="UTF-8" />
         <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-        <title>Gemini Web Tool Calling</title>
+        <title>Two Readouts</title>
+        <script src="https://cdnjs.cloudflare.com/ajax/libs/marked/15.0.7/marked.min.js"></script>
+        <script src="https://cdnjs.cloudflare.com/ajax/libs/dompurify/3.2.4/purify.min.js"></script>
         <style>
             * {
                 box-sizing: border-box;
@@ -41,6 +43,23 @@
             .msg.user {
                 align-self: flex-end;
                 text-align: right;
+            }
+            .msg.assistant {
+                max-width: 100%;
+            }
+            .msg .content p {
+                margin: 0 0 0.75rem;
+            }
+            .msg .content p:last-child {
+                margin-bottom: 0;
+            }
+            .msg .content ol,
+            .msg .content ul {
+                margin: 0.35rem 0 0.75rem 1.25rem;
+                padding: 0;
+            }
+            .msg .content li {
+                margin: 0.45rem 0;
             }
             .msg .role {
                 font-size: 0.75rem;
@@ -98,10 +117,50 @@
             button:disabled {
                 opacity: 0.3;
             }
+            header {
+                padding: 1.25rem 1.5rem 0.5rem;
+                border-bottom: 1px solid #e0e0e0;
+            }
+            header h1 {
+                font-size: 1.25rem;
+                font-weight: 650;
+                margin-bottom: 0.35rem;
+            }
+            header p {
+                color: #333;
+                line-height: 1.45;
+                margin-bottom: 0.75rem;
+            }
+            #samples {
+                display: flex;
+                flex-direction: column;
+                gap: 0.4rem;
+                margin-bottom: 0.75rem;
+            }
+            #samples button {
+                background: #fff;
+                color: #000;
+                border: 1px solid #ccc;
+                text-transform: none;
+                letter-spacing: 0;
+                text-align: left;
+                font-size: 0.85rem;
+            }
         </style>
     </head>
     <body>
         <div id="container">
+            <header>
+                <h1>Two Readouts</h1>
+                <p>
+                    This compares the official US and China statements about the
+                    September 2026 Trump-Xi meeting, including what The Guardian
+                    reported, and it fact-checks three Medicare claims from a Trump post.
+                    Ask a question below, or start with one of these. A follow-up stays
+                    in the same conversation.
+                </p>
+                <div id="samples"></div>
+            </header>
             <div id="messages"></div>
             <div id="input-area">
                 <input
@@ -119,25 +178,52 @@
             const sendBtn = document.getElementById("send-btn");
             let sessionId = null;
 
+            function renderMarkdown(text) {
+                const html = marked.parse(text || "", { gfm: true, breaks: true });
+                return DOMPurify.sanitize(html);
+            }
+
             function addMessage(role, text, isLoading = false) {
                 const div = document.createElement("div");
                 div.className =
                     "msg " +
                     (role === "you" ? "user" : "assistant") +
                     (isLoading ? " loading" : "");
-                div.innerHTML =
-                    '<div class="role">' +
-                    role +
-                    '</div><div class="content">' +
-                    text +
-                    "</div>";
+                const roleEl = document.createElement("div");
+                roleEl.className = "role";
+                roleEl.textContent = role;
+                const content = document.createElement("div");
+                content.className = "content";
+                if (role === "you" || isLoading) {
+                    content.textContent = text;
+                } else {
+                    content.innerHTML = renderMarkdown(text);
+                }
+                div.appendChild(roleEl);
+                div.appendChild(content);
                 messages.appendChild(div);
                 messages.scrollTop = messages.scrollHeight;
                 return div;
             }
 
-            async function send() {
-                const text = userInput.value.trim();
+            const sampleQuestions = [
+                "Did Trump accurately describe the Medicare payments and premiums?",
+                "What did The Guardian report that the official statements left out?",
+                "How do the US and China statements differ on military crisis communication?",
+            ];
+            const samples = document.getElementById("samples");
+            for (const question of sampleQuestions) {
+                const button = document.createElement("button");
+                button.type = "button";
+                button.textContent = question;
+                button.addEventListener("click", function () {
+                    send(question);
+                });
+                samples.appendChild(button);
+            }
+
+            async function send(preset) {
+                const text = (typeof preset === "string" ? preset : userInput.value).trim();
                 if (!text) return;
 
                 userInput.value = "";
@@ -172,8 +258,8 @@
                         );
                         messages.insertBefore(div, loading);
                     }
-                    loading.querySelector(".content").textContent =
-                        data.response;
+                    loading.querySelector(".content").innerHTML =
+                        renderMarkdown(data.response);
                     loading.classList.remove("loading");
                 } catch (e) {
                     loading.querySelector(".content").textContent =

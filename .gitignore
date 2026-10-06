@@ -7,6 +7,15 @@ __pycache__/
 
 # Local secrets and config. Commit .env.example instead, never .env.
 .env
+config/secrets.toml
 
 # macOS
 .DS_Store
+
+# Local scratch files
+.Rhistory
+DESIGN.html
+spikes/
+
+# Real chat responses used while building the page. They can contain article text.
+frontend_samples/

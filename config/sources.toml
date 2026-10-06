@@ -1,0 +1,105 @@
+# Two Readouts source configuration.
+#
+# Top-level key is "cases". Each case has a "type" field:
+#   "meeting"      -- US vs China official statement comparison
+#   "claim_check"  -- fact-check numerical claims against official sources
+#
+# Verified Oct 5, 2026 from Cloud Run europe-west1:
+#   us_fact_sheet, china_mfa_english, china_govcn_mirror returned HTTP 200.
+
+[cases.washington_2026_09]
+type = "meeting"
+name = "Xi Jinping state visit to the United States"
+dates = "2026-09-23 to 2026-09-25"
+press_articles = [
+    "us-news/2026/sep/24/xi-jinping-trump-china-cooperation-thucydides-trap",
+    "world/2026/sep/28/trump-xi-jinping-china-buy-weapons",
+]
+
+[[cases.washington_2026_09.sources]]
+name = "us_fact_sheet"
+display_name = "White House fact sheet"
+published = "2026-09-25"
+side = "us"
+language = "en"
+url = "https://www.whitehouse.gov/fact-sheets/2026/09/fact-sheet-president-donald-j-trump-advances-a-fair-and-reciprocal-relationship-with-china-while-hosting-historic-state-visit/"
+marker = "super intelligence"
+priority = 1
+
+[[cases.washington_2026_09.sources]]
+name = "china_mfa_english"
+display_name = "China Ministry of Foreign Affairs statement"
+published = "2026-09-26"
+side = "china"
+language = "en"
+url = "https://www.fmprc.gov.cn/eng/xw/zyxw/202609/t20260926_12031663.html"
+marker = "Eight Deliverables"
+priority = 1
+
+[[cases.washington_2026_09.sources]]
+name = "china_govcn_mirror"
+display_name = "China Ministry of Foreign Affairs statement"
+published = "2026-09-26"
+side = "china"
+language = "en"
+url = "https://english.www.gov.cn/news/202609/26/content_WS6ab7d2bcc6d00ca5f9a0d7d1.html"
+marker = "eight deliverables"
+priority = 2
+
+[[cases.washington_2026_09.sources]]
+name = "china_embassy_mirror"
+display_name = "China Ministry of Foreign Affairs statement"
+published = "2026-09-26"
+side = "china"
+language = "en"
+url = "https://us.china-embassy.gov.cn/eng/zgyw/202609/t20260926_12031663.htm"
+marker = "Eight Deliverables"
+priority = 3
+
+[[cases.washington_2026_09.sources]]
+name = "china_mfa_chinese_original"
+display_name = "China Ministry of Foreign Affairs statement"
+published = "2026-09-26"
+side = "china"
+language = "zh"
+url = "https://www.mfa.gov.cn/zyxw/202609/t20260926_12031616.shtml"
+markers = ["人工智能", "超级智能"]
+role = "term_check_only"
+
+# ---------------------------------------------------------------------------
+# Medicare claim check case.
+# URLs confirmed Oct 5, 2026. Markers and anchors confirmed in Phase M.
+# ---------------------------------------------------------------------------
+
+[cases.medicare_checks_2026_10]
+type = "claim_check"
+name = "Medicare Part B premium claims, October 2026"
+dates = "2026-10-02"
+
+[[cases.medicare_checks_2026_10.sources]]
+name = "wh_medicare_fact_sheet"
+display_name = "White House fact sheet"
+published = "2026-10-02"
+side = "us"
+language = "en"
+url = "https://www.whitehouse.gov/fact-sheets/2026/10/fact-sheet-president-donald-j-trump-announces-medicare-improvement-fund-payments-for-seniors/"
+selector = "div.entry-content"
+marker = "Medicare Improvement Fund"
+priority = 1
+
+[[cases.medicare_checks_2026_10.sources]]
+name = "cms_2026_premiums"
+display_name = "CMS fact sheet"
+published = "2025-11-14"
+side = "us"
+language = "en"
+url = "https://www.cms.gov/newsroom/fact-sheets/2026-medicare-parts-b-premiums-deductibles"
+selector = "div.field--name-body"
+marker = "Medicare Part B Premium and Deductible"
+priority = 1
+
+# Guardian Content API. Curated article ids live on the meeting case.
+# The API key is not stored here.
+[guardian]
+content_api = "https://content.guardianapis.com"
+show_fields = "body,headline,byline"

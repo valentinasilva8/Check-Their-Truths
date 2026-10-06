@@ -1,72 +1,355 @@
-"""The tools the harness can run, and the JSON that describes them to the model."""
+"""Tools the chat agent can call.
+
+Two Readouts compares the official US and China statements about the
+September 2026 Trump-Xi meeting, compares those statements with Guardian
+coverage, and fact-checks three Medicare claims from a Trump post.
+
+Five tools:
+
+- list_cases reads the local config. It does not use the network.
+- get_official_source uses external data. It fetches a live official page,
+  or a saved snapshot when the live page fails.
+- get_press_coverage uses external data. It fetches the two curated
+  Guardian articles.
+- compare_statements is original. It asks the model to compare two sides,
+  then keeps a quote only when that quote is in the source text.
+- check_claim is original. It applies fixed arithmetic rules to official
+  numbers. The model does not do the math.
+
+app.py sends TOOLS to the model so the model knows each tool's name and
+arguments. When the model asks for a tool, app.py calls run_tool. run_tool
+looks the name up in TOOL_MAP and runs that function. An unknown name or
+bad arguments comes back as an error string. It does not crash the loop.
+"""
 
 import json
 
-import requests
-
-# Open-Meteo is free and needs no API key.
-GEOCODE_URL = "https://geocoding-api.open-meteo.com/v1/search"
-FORECAST_URL = "https://api.open-meteo.com/v1/forecast"
-
-
-def get_weather(location: str) -> str:
-    """Get the current weather for a location."""
-    try:
-        places = requests.get(GEOCODE_URL, params={"name": location, "count": 1}, timeout=10).json()
-        if not places.get("results"):
-            return json.dumps({"error": f"City '{location}' was not found."})
-        place = places["results"][0]
-
-        current = requests.get(
-            FORECAST_URL,
-            params={
-                "latitude": place["latitude"],
-                "longitude": place["longitude"],
-                "current": "temperature_2m,relative_humidity_2m,wind_speed_10m",
-                "temperature_unit": "fahrenheit",
-                "wind_speed_unit": "mph",
-            },
-            timeout=10,
-        ).json()["current"]
-    except requests.RequestException as e:
-        # The model cannot see an exception. Return something it can reason about.
-        return json.dumps({"error": f"Weather service failed: {e}"})
-
-    return json.dumps({
-        "location": place["name"],
-        "temp_f": current["temperature_2m"],
-        "humidity": current["relative_humidity_2m"],
-        "wind_mph": current["wind_speed_10m"],
-    })
+from claim_check import check_claim as _check_claim, load_claims
+from compare import compare_statements as _compare_statements
+from press import get_press_coverage as _get_press_coverage
+from sources import get_official_source as _fetch_official_source, load_config
 
 
-# What the model sees: the "set notes" in the screenplay.
+def list_cases() -> str:
+    """List the cases the agent can work on.
+
+    Arguments: none.
+
+    Returns a JSON string with each case id, type (meeting or claim_check),
+    name, and dates.
+
+    Data comes from config/sources.toml. No network call.
+
+    Errors: a missing or unreadable config file raises. A valid config with
+    no cases returns an empty list.
+    """
+    config = load_config()
+    cases = [
+        {
+            "case_id": case_id,
+            "type": case["type"],
+            "name": case["name"],
+            "dates": case["dates"],
+        }
+        for case_id, case in config["cases"].items()
+    ]
+    return json.dumps({"cases": cases}, ensure_ascii=False)
+
+
+def get_official_source(case_id: str, source: str) -> str:
+    """Fetch one side of an official meeting statement.
+
+    Arguments: case_id (a meeting case from list_cases) and source
+    ("us" or "china").
+
+    Returns a JSON string with the paragraphs, the page URL, when it was
+    retrieved, and whether the text is live or from a saved snapshot.
+
+    Data comes from the live page listed in config/sources.toml. If that
+    page fails, the saved snapshot in data/snapshots/ is used instead.
+
+    Errors: an unknown case id, or a claim-check case, returns a clear
+    error. It does not crash. A side that cannot be loaded returns the
+    error from the fetcher.
+    """
+    config = load_config()
+    case = config["cases"].get(case_id)
+    if not case:
+        return json.dumps({"error": f"Case '{case_id}' not found. Call list_cases to see supported cases."})
+    if case.get("type") != "meeting":
+        return json.dumps({
+            "error": (
+                f"get_official_source requires a meeting case; "
+                f"'{case_id}' is type '{case.get('type')}'. "
+                "Use check_claim for claim_check cases."
+            )
+        })
+    result = _fetch_official_source(config, case_id, source)
+    return json.dumps(result, ensure_ascii=False)
+
+
+def get_press_coverage(case_id: str) -> str:
+    """Fetch the curated Guardian articles for a meeting case.
+
+    Arguments: case_id (a meeting case from list_cases).
+
+    Returns a JSON string with each article's headline, byline, link,
+    published time, and numbered paragraphs.
+
+    Data comes from the Guardian Content API, using the article ids in
+    config/sources.toml and the key in the local secrets file. Article
+    text stays in memory. It is not written to disk.
+
+    Errors: a missing key, a failed fetch, a claim-check case, or an
+    unknown case returns "press side unavailable" or a clear error. It
+    does not crash, and the error does not include the API key.
+    """
+    config = load_config()
+    result = _get_press_coverage(config, case_id)
+    return json.dumps(result, ensure_ascii=False)
+
+
+def compare_statements(
+    case_id: str,
+    topic: str = "",
+    left: str = "us",
+    right: str = "china",
+) -> str:
+    """Compare two sides of a meeting and keep only quotes that match the source.
+
+    Arguments: case_id (a meeting case), topic (empty string means every
+    topic), and left and right, each "us", "china", or "press".
+
+    Returns a JSON string of rows. Each row has a label, a one-sentence
+    reason, and the quotes that passed verification. Rows whose quotes
+    could not be verified are counted in "dropped" and are not shown.
+    At most 12 comparison rows are returned. An empty topic is capped
+    the same way.
+
+    Data comes from get_official_source for "us" and "china", and from
+    get_press_coverage for "press". The model proposes the rows. This
+    function checks each quote against the source text before returning it.
+
+    Errors: an unknown case, a claim-check case, or a bad side name returns
+    a clear error. It does not crash. If the press side cannot be loaded,
+    the result is "press side unavailable".
+    """
+    config = load_config()
+    result = _compare_statements(config, case_id, topic, left, right)
+    return json.dumps(result, ensure_ascii=False)
+
+
+def check_claim(case_id: str, claim_id: str) -> str:
+    """Fact-check one Medicare claim with fixed rules and code math.
+
+    Arguments: case_id (a claim-check case from list_cases) and claim_id
+    ("C1", "C2", or "C3").
+
+    Returns a JSON string with the verdict (supported, imprecise,
+    contradicted, or not_checkable), the numbers, the arithmetic, the
+    evidence quote, a "Checked against" line, and a context note when
+    one applies.
+
+    Data comes from config/claims.toml for the claim and the post text,
+    and from the official White House or CMS page named in that claim.
+    If the live page fails, the saved snapshot is used. The model does
+    not calculate the result.
+
+    Errors: a meeting case, an unknown claim, or a claim whose phrase is
+    not in the post returns a clear error or not_checkable. It does not
+    crash.
+    """
+    config = load_config()
+    claims = load_claims()
+    result = _check_claim(config, claims, case_id, claim_id)
+    return json.dumps(result, ensure_ascii=False)
+
+
+# Schemas sent to the model. app.py passes this list as the tools argument.
 TOOLS = [
     {
         "type": "function",
         "function": {
-            "name": "get_weather",
-            "description": "Get the current weather (temperature, humidity, wind) for a city.",
+            "name": "check_claim",
+            "description": (
+                "Use this to fact-check one Medicare claim from the October 2026 post. "
+                "The verdict and the arithmetic are computed in code. Do not calculate them yourself. "
+                "Do not use this for the Trump-Xi meeting. Use compare_statements for that."
+            ),
             "parameters": {
                 "type": "object",
                 "properties": {
-                    "location": {"type": "string", "description": "City name, e.g. 'New York'"},
+                    "case_id": {
+                        "type": "string",
+                        "description": (
+                            "A claim_check case id from list_cases. "
+                            "The only one is medicare_checks_2026_10. "
+                            "Do not pass a meeting case id."
+                        ),
+                    },
+                    "claim_id": {
+                        "type": "string",
+                        "description": (
+                            "Which claim to check. Must be C1 (how many seniors), "
+                            "C2 (the payment amount), or C3 (whether premiums fell)."
+                        ),
+                    },
                 },
-                "required": ["location"],
+                "required": ["case_id", "claim_id"],
+            },
+        },
+    },
+    {
+        "type": "function",
+        "function": {
+            "name": "list_cases",
+            "description": (
+                "Use this when you do not yet know which case id to pass to another tool. "
+                "Do not use it as the answer by itself. It returns each case id, its type "
+                "(meeting or claim_check), its name, and its dates. It takes no arguments."
+            ),
+            "parameters": {"type": "object", "properties": {}, "required": []},
+        },
+    },
+    {
+        "type": "function",
+        "function": {
+            "name": "compare_statements",
+            "description": (
+                "Use this to compare two sides of the Trump-Xi meeting. "
+                "Do not use it for Medicare claims. Use check_claim for those. "
+                "Do not use it when the user only wants the raw statement or the articles. "
+                "Quotes in the result have already been checked against the source. "
+                "Do not add quotes of your own."
+            ),
+            "parameters": {
+                "type": "object",
+                "properties": {
+                    "case_id": {
+                        "type": "string",
+                        "description": (
+                            "A meeting case id from list_cases. "
+                            "The only one is washington_2026_09. "
+                            "Do not pass a claim_check case id."
+                        ),
+                    },
+                    "topic": {
+                        "type": "string",
+                        "description": (
+                            "The subject to compare, such as 'military', 'AI', or 'trade'. "
+                            "Use an empty string to cover every topic. "
+                            "An empty topic returns at most 12 rows."
+                        ),
+                    },
+                    "left": {
+                        "type": "string",
+                        "enum": ["us", "china", "press"],
+                        "description": (
+                            "The first side. Must be 'us', 'china', or 'press'. "
+                            "'press' is The Guardian. Do not pass any other value."
+                        ),
+                    },
+                    "right": {
+                        "type": "string",
+                        "enum": ["us", "china", "press"],
+                        "description": (
+                            "The second side. Must be 'us', 'china', or 'press'. "
+                            "'press' is The Guardian. Do not pass any other value."
+                        ),
+                    },
+                },
+                "required": ["case_id"],
+            },
+        },
+    },
+    {
+        "type": "function",
+        "function": {
+            "name": "get_official_source",
+            "description": (
+                "Use this when the user wants the text of an official US or China statement. "
+                "Do not use it to compare two sides. Use compare_statements for that. "
+                "Do not use it for Guardian articles or for Medicare claims."
+            ),
+            "parameters": {
+                "type": "object",
+                "properties": {
+                    "case_id": {
+                        "type": "string",
+                        "description": (
+                            "A meeting case id from list_cases. "
+                            "The only one is washington_2026_09. "
+                            "Do not pass a claim_check case id."
+                        ),
+                    },
+                    "source": {
+                        "type": "string",
+                        "enum": ["us", "china"],
+                        "description": (
+                            "Which official side to load. Must be 'us' or 'china'. "
+                            "Do not pass 'press'."
+                        ),
+                    },
+                },
+                "required": ["case_id", "source"],
+            },
+        },
+    },
+    {
+        "type": "function",
+        "function": {
+            "name": "get_press_coverage",
+            "description": (
+                "Use this when the user wants the Guardian articles themselves. "
+                "Do not use it to compare those articles with an official statement. "
+                "Use compare_statements with 'press' for that. "
+                "Do not use it for Medicare claims. It does not search. "
+                "It loads the two curated articles."
+            ),
+            "parameters": {
+                "type": "object",
+                "properties": {
+                    "case_id": {
+                        "type": "string",
+                        "description": (
+                            "A meeting case id from list_cases. "
+                            "The only one is washington_2026_09. "
+                            "Do not pass a claim_check case id."
+                        ),
+                    },
+                },
+                "required": ["case_id"],
             },
         },
     },
 ]
 
-# What the harness runs: tool name -> Python function.
-TOOL_MAP = {"get_weather": get_weather}
+# Name to function. run_tool uses this. The model never calls these directly.
+TOOL_MAP = {
+    "list_cases": list_cases,
+    "get_official_source": get_official_source,
+    "get_press_coverage": get_press_coverage,
+    "compare_statements": compare_statements,
+    "check_claim": check_claim,
+}
 
 
 def run_tool(name: str, args: dict) -> str:
     """Run one tool call. Models invent tool names and arguments; never let that crash the loop."""
     if name not in TOOL_MAP:
-        return json.dumps({"error": f"Unknown tool '{name}'. Available: {list(TOOL_MAP)}"})
+        return json.dumps({
+            "error": (
+                f"Unknown tool '{name}'. Do not invent tool names. "
+                "Call one of: list_cases, get_official_source, get_press_coverage, "
+                "compare_statements, check_claim."
+            )
+        })
     try:
         return TOOL_MAP[name](**args)
     except TypeError as e:
-        return json.dumps({"error": f"Bad arguments for {name}: {e}"})
+        return json.dumps({
+            "error": (
+                f"Bad arguments for {name}: {e}. "
+                "Check the required arguments and call the tool again."
+            )
+        })

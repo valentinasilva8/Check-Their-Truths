@@ -1,0 +1,105 @@
+# Fact-check claims for the medicare_checks_2026_10 case.
+#
+# claim_type controls which rule claim_check.py applies:
+#   at_least     -- official >= claimed_value -> supported; else contradicted
+#   approximately -- |official - claimed_value| / claimed_value:
+#                    <= 5%  -> supported; <= 25% -> imprecise; > 25% -> contradicted
+#                    denominator is claimed_value (D-34)
+#   direction    -- sign(official_change) matches claimed_direction -> supported;
+#                   zero change -> contradicted; opposite sign -> contradicted
+#
+# Each claim references a named post. Code verifies that claimed_phrase is an
+# exact substring of the post's verbatim_text before applying any rule.
+# If not found: verdict = not_checkable (D-35).
+#
+# Fields marked "TODO" are confirmed during Phase M feasibility check.
+
+# ---------------------------------------------------------------------------
+# Source post
+# ---------------------------------------------------------------------------
+
+[posts.trump_truth_social_2026_10_02]
+speaker = "Donald J. Trump"
+platform = "Truth Social"
+date = "2026-10-02"
+is_excerpt = true
+verbatim_text = """I am pleased to announce that my Administration will, immediately, begin sending "Checks" of nearly $100 to over 20 MILLION wonderful Seniors to help pay for their Medicare Part B premiums, which we have already reduced by significant amounts"""
+text_source = "Quoted identically by Axios, Fox Business, and NewsNation; original post not fetched"
+original_url = "TODO"
+quoted_by = [
+    "https://www.axios.com/2026/10/03/trump-medicare-100-seniors-improvement-fund",
+    "https://www.foxbusiness.com/politics/trump-announces-90-checks-more-than-20m-seniors-help-combat-medicare-costs",
+    "https://www.newsnationnow.com/business/your-money/president-trump-check-seniors-medicare/",
+]
+
+# ---------------------------------------------------------------------------
+# C1: Enrollment count claim (at_least)
+# ---------------------------------------------------------------------------
+
+[claims.medicare_checks_2026_10.C1]
+claim_id = "C1"
+claim_type = "at_least"
+post = "trump_truth_social_2026_10_02"
+claimed_phrase = "over 20 MILLION wonderful Seniors"
+
+[claims.medicare_checks_2026_10.C1.checks]
+source = "wh_medicare_fact_sheet"
+# Number-free anchor (D-41): locates the sentence; regex extracts the number from that sentence only.
+anchor = "announced that the federal government will be making one-time payments of"
+# Captures "20 million" as a number-word string; claim_check.py converts to 20000000.
+regex = "more than ([\\d,]+ million) enrollees"
+label = "enrollee_count"
+claimed_value = 20000000
+unit = "count"
+
+# ---------------------------------------------------------------------------
+# C2: Per-senior payment claim (approximately)
+# ---------------------------------------------------------------------------
+
+[claims.medicare_checks_2026_10.C2]
+claim_id = "C2"
+claim_type = "approximately"
+post = "trump_truth_social_2026_10_02"
+claimed_phrase = "nearly $100"
+
+[claims.medicare_checks_2026_10.C2.checks]
+source = "wh_medicare_fact_sheet"
+# Number-free anchor (D-41): same sentence as C1; regex extracts payment amount only.
+anchor = "announced that the federal government will be making one-time payments of"
+# Captures "90" from "payments of $90 per person".
+regex = "payments of \\$([\\d,]+) per person"
+label = "payment_per_person_usd"
+claimed_value = "100.00"
+unit = "USD"
+
+# ---------------------------------------------------------------------------
+# C3: Premium direction claim (direction)
+# ---------------------------------------------------------------------------
+
+[claims.medicare_checks_2026_10.C3]
+claim_id = "C3"
+claim_type = "direction"
+post = "trump_truth_social_2026_10_02"
+claimed_phrase = "which we have already reduced by significant amounts"
+
+[claims.medicare_checks_2026_10.C3.checks]
+source = "cms_2026_premiums"
+# Number-free anchor (D-41): locates sentence 2 of CMS para [19]. All three regexes
+# run on that sentence only, so they cannot match the deductible numbers in sentence 3.
+anchor = "The standard monthly premium for Medicare Part B enrollees will be"
+# Captures "185.00" -- the 2025 premium (the "before" value).
+regex_before = "from \\$([\\d.]+) in 2025"
+# Captures "202.90" -- the 2026 premium (the "after" value).
+regex_after = "will be \\$([\\d.]+) for 2026"
+# Captures "17.90" -- the CMS-stated increase.
+# Code verifies computed (after - before) matches stated; mismatch -> not_checkable (D-35).
+regex_stated_change = "increase of \\$([\\d.]+) from"
+claimed_direction = "decrease"
+label = "part_b_monthly_premium"
+unit = "USD"
+
+[claims.medicare_checks_2026_10.C3.context_note_check]
+source = "cms_2026_premiums"
+# Number-free anchor (D-41): locates the sentence in CMS para [20] that provides
+# nuance for the direction verdict. Regex runs on that sentence only.
+anchor = "had not taken action to address unprecedented spending on skin substitutes"
