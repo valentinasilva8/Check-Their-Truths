@@ -2,6 +2,7 @@
 
 import json
 
+from compare import compare_statements as _compare_statements
 from sources import get_official_source as _fetch_official_source, load_config
 
 
@@ -42,6 +43,22 @@ def get_official_source(case_id: str, source: str) -> str:
     return json.dumps(result, ensure_ascii=False)
 
 
+def compare_statements(
+    case_id: str,
+    topic: str = "",
+    left: str = "us",
+    right: str = "china",
+) -> str:
+    """Compare two sides of a meeting case topic by topic.
+
+    Returns verified rows with labels, reasons, and verbatim quotes.
+    topic="" compares all topics (capped at 12 rows).
+    """
+    config = load_config()
+    result = _compare_statements(config, case_id, topic, left, right)
+    return json.dumps(result, ensure_ascii=False)
+
+
 TOOLS = [
     {
         "type": "function",
@@ -53,6 +70,49 @@ TOOLS = [
                 "if you are unsure which case IDs are available."
             ),
             "parameters": {"type": "object", "properties": {}, "required": []},
+        },
+    },
+    {
+        "type": "function",
+        "function": {
+            "name": "compare_statements",
+            "description": (
+                "Compare two sides of a meeting case topic by topic. "
+                "left and right can be 'us', 'china', or 'press'. "
+                "Returns rows labeled same, different_framing, contradiction, "
+                "only_{left}, or only_{right}. Each row has a reason and verified "
+                "verbatim quotes. For the AI topic on washington_2026_09, also "
+                "reports whether the Chinese original contains 人工智能 and/or "
+                "超级智能. topic='' compares all topics (capped at 12 rows). "
+                "Meeting cases only."
+            ),
+            "parameters": {
+                "type": "object",
+                "properties": {
+                    "case_id": {
+                        "type": "string",
+                        "description": "Meeting case ID from list_cases.",
+                    },
+                    "topic": {
+                        "type": "string",
+                        "description": (
+                            "Topic to compare, e.g. 'AI', 'trade', 'military'. "
+                            "Empty string compares all topics."
+                        ),
+                    },
+                    "left": {
+                        "type": "string",
+                        "enum": ["us", "china", "press"],
+                        "description": "Left side: 'us', 'china', or 'press'.",
+                    },
+                    "right": {
+                        "type": "string",
+                        "enum": ["us", "china", "press"],
+                        "description": "Right side: 'us', 'china', or 'press'.",
+                    },
+                },
+                "required": ["case_id"],
+            },
         },
     },
     {
@@ -86,6 +146,7 @@ TOOLS = [
 TOOL_MAP = {
     "list_cases": list_cases,
     "get_official_source": get_official_source,
+    "compare_statements": compare_statements,
 }
 
 

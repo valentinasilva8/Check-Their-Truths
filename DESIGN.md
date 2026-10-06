@@ -3,21 +3,25 @@
 ## 1. Folder structure
 
 ```
-app.py                  existing -- raise MAX_TOOL_ROUNDS to 8, update SYSTEM_PROMPT
-tools.py                existing -- replace weather tool with 4 new tools
+app.py                  existing -- MAX_TOOL_ROUNDS=8, updated SYSTEM_PROMPT
+tools.py                existing -- list_cases, get_official_source, compare_statements,
+                                    get_press_coverage (Phase P), check_claim (Phase M)
 index.html              existing -- update title, layout, comparison table
 config/
-  sources.toml          existing
+  sources.toml          cases config (meeting + claim_check types)
+  claims.toml           claim definitions for check_claim
 data/
   snapshots/            committed to the repo; must be present before Cloud Run deploy
     washington_2026_09_us_fact_sheet.json
     washington_2026_09_china_mfa_english.json
     washington_2026_09_china_govcn_mirror.json
-  commitments/
-    washington_2026_09.json   manually curated commitment list for the meeting
+    washington_2026_09_china_embassy_mirror.json
+    washington_2026_09_china_mfa_chinese_original.json
 tests/
-  test_verify.py        quote normalization and verification logic
-  test_tools.py         each tool: happy path, fallback, error cases
+  test_sources.py       config loading, HTML extraction, fallback, URL safety
+  test_compare.py       compare_statements: quote verification, label validation, cache
+  test_claim_check.py   check_claim: verdict rules, Decimal arithmetic (Phase M)
+  test_press.py         get_press_coverage: Guardian fetch, secrets, cache (Phase P)
 EVAL.md                 expected rows checklist for the September 2026 meeting
 ```
 
@@ -82,30 +86,26 @@ Tools serialize these to JSON strings (not dicts) before returning.
 
 ## 4. How compare_statements works
 
-1. **Cache check**: build key `(meeting_id, topic.strip().lower(), sha256(us_paragraphs + china_paragraphs))`, where topic is an empty string when not provided. If a cached result exists for this key, return it immediately without a model call.
-2. **Fetch**: call `get_official_statement` internally for both sides (not via the model). For the AI topic, also fetch the Chinese original (role=term_check_only) to run the term check in step 5.
-3. **Model call (temperature=0)**: call the model once with a structured prompt that includes all paragraphs from both statements and the topic (if given). The prompt instructs the model to: group paragraphs by topic, select one verbatim quote per side per row, assign a label (same / different_framing / contradiction / only_us / only_china), and write one sentence explaining the label. The model must copy quotes character-for-character from the input -- it cannot rephrase.
+1. **Cache check**: build key `(case_id, topic.strip().lower(), left, right, PROMPT_VERSION, sha256(left_paragraphs + right_paragraphs))`. `PROMPT_VERSION` is a module-level constant in compare.py; bump it whenever the prompt changes. If a cached result exists for this key, return it immediately without a model call.
+2. **Fetch**: call `get_official_source` internally for both sides (not via the model). For the AI topic, also load the Chinese original snapshot to run the term check in step 5.
+3. **Model call (temperature=0)**: call the model once with a structured prompt that includes all paragraphs from both statements and the topic (if given). The prompt instructs the model to: group paragraphs by topic, select one verbatim quote per side per row, assign a label (same / different_framing / contradiction / only_{left} / only_{right}), and write one sentence explaining the label. The model must copy quotes character-for-character from the input -- it cannot rephrase. The prompt includes a strict definition of "contradiction": both sides must make explicit, incompatible factual claims; different terms, emphasis, or omission is never contradiction.
 4. **Verify every quote**: for each quote the model returns, normalize the quote and its source paragraphs (collapse whitespace, convert curly/smart quotes to straight, replace non-breaking spaces). The quote passes only if it is an exact substring of at least one normalized paragraph AND is at least 6 words long. Quotes that fail are logged to `drop_reasons` and the row is removed.
-5. **Chinese term check (AI topic only)**: exact-match the normalized Chinese original for 人工智能 and 超级智能 and append a row reporting which terms are present. This row is not subject to quote verification (it is a term-presence check, not a quote).
+5. **Chinese term check (AI topic or empty topic, china side involved)**: exact-match the Chinese original snapshot for 人工智能 and 超级智能 and append a special `term_check` row. This row is outside the regular label set, is not subject to quote verification, and is not counted toward the 12-row cap. It is always the last row in the result.
 6. **Report dropped rows**: include `dropped` count and `drop_reasons` in the return value. The frontend displays "N rows hidden because quotes could not be verified."
 7. **Return** verified rows, the term-check row if applicable, dropped count, and drop reasons. Store result in cache.
 
 ---
 
-## 5. track_commitments status logic
+## 5. check_claim logic (Phase M)
 
-Commitment data is curated manually in `data/commitments/{meeting_id}.json` (quotes are sourced from the statements; no invented text). At runtime:
+Claims are defined in `config/claims.toml`. Each claim has a `claim_type` field: `at_least`, `approximately`, or `direction`. Before applying any rule, code verifies `claimed_phrase` is an exact substring of the post's `verbatim_text`; if not, verdict is `not_checkable`.
 
-```
-if commitment.deadline is None:
-    status = "no date given"
-elif date.fromisoformat(commitment.deadline) > today:
-    status = "upcoming"
-else:
-    status = "deadline passed, not verified"
-```
+Rules (see D-31, D-33, D-34):
+- `at_least`: official >= claimed_value -> supported; else contradicted
+- `approximately`: |official - claimed_value| / claimed_value: <= 5% supported, <= 25% imprecise, > 25% contradicted
+- `direction`: sign(after - before) matches claimed_direction -> supported; zero change or opposite sign -> contradicted
 
-`today` is passed in at call time so tests can inject a fixed date. When called for real, `today` is derived from the current time in the America/New_York timezone.
+All arithmetic uses `decimal.Decimal` (see D-30). Arithmetic expressions are stored as strings for display. An optional `context_note` cites a verified source sentence providing another reasonable reading (see D-33). For C3, code additionally verifies the computed change matches the CMS-stated change; mismatch -> not_checkable (see D-35).
 
 ---
 
@@ -116,8 +116,8 @@ else:
 |  TWO READOUTS                                    |
 |  Official statements, side by side               |
 +--------------------------------------------------+
-|  [tool call] list_meetings() -> ...         ^    |
-|  [tool call] get_official_statement(...)    |    |
+|  [tool call] list_cases() -> ...            ^    |
+|  [tool call] get_official_source(...)       |    |
 |  [tool call] compare_statements(...)       chat  |
 |                                             |    |
 |  ASSISTANT                                  |    |
@@ -126,11 +126,11 @@ else:
 |                                                  |
 |  +--------------------------------------------+ |
 |  | TOPIC | LABEL         | US       | CHINA   | |
-|  | AI    | contradiction | "super   | "China- | |
-|  |       | US calls it   |  intelli-|  U.S.   | |
+|  | AI    | diff_framing  | "super   | "China- | |
+|  |       | US uses       |  intelli-|  U.S.   | |
 |  |       | "super intell-|  gence"  |  AI     | |
 |  |       | igence"; China|  [src]   |  Dialog | |
-|  |       | names a Dialog|          |  ue"    | |
+|  |       | uses "AI"     |          |  ue"    | |
 |  |       |               |          |  [src]  | |
 |  +--------------------------------------------+ |
 |  Chinese original: 人工智能 YES / 超级智能 NO        |
@@ -151,22 +151,34 @@ Tool calls collapse/expand. Each statement carries a green LIVE or yellow SNAPSH
 
 **pytest (automated)**
 
-`tests/test_verify.py`
-- Normalization: curly quotes, non-breaking spaces, collapsed whitespace all pass
-- Exact substring found: passes
-- Quote trimmed by one character: fails
-- Quote from wrong paragraph: fails
-- Quote under 6 words: fails even if it is an exact substring
-- Quote exactly 6 words: passes
+`tests/test_sources.py`
+- Config loading, both case types present
+- HTML extraction per site; boilerplate absent
+- Snapshot fallback on network failure; live_changed flag when marker absent
+- URL safety: non-config URLs refused
 
-`tests/test_tools.py`
-- `list_meetings`: returns correct shape from real config file
-- `get_official_statement`: returns Statement shape with mocked HTTP 200
-- `get_official_statement`: falls back to snapshot with mocked HTTP 404; snapshot marked live=False
-- `compare_statements`: drops row with bad quote; dropped count is 1, drop_reason present
-- `compare_statements`: Chinese term check finds 人工智能, does not find 超级智能 in the saved snapshot
-- `track_commitments`: future deadline -> "upcoming"; past deadline -> "deadline passed, not verified"; no date -> "no date given"
-- `track_commitments`: every commitment's exact_quote is a substring of the corresponding snapshot (uses real snapshot files)
+`tests/test_compare.py`
+- `_normalize` and `_verify_quote` unit tests
+- `compare_statements`: drops row with bad quote (dropped=1, drop_reasons has one entry per failed quote)
+- `compare_statements`: 5-word quote dropped; 6-word quote kept
+- `compare_statements`: invalid label dropped; contradiction missing right_quote dropped
+- `compare_statements`: model returns invalid JSON -> error in result, no crash
+- `compare_statements`: wrong case type -> error mentions "meeting"
+- `compare_statements`: press side -> "not available yet"
+- Chinese term check fires for topic="ai", "artificial intelligence", empty; not for "coal trade"
+- term_check row not counted toward 12-row cap; cap_hit reported
+- Cache: second call with same inputs does not call model
+
+`tests/test_claim_check.py` (Phase M)
+- Verdict rules: at_least, approximately, direction with synthetic numbers
+- Decimal arithmetic, ROUND_HALF_UP for pct_change
+- claimed_phrase not in post -> not_checkable
+- C3 cross-check mismatch -> not_checkable
+- Million-word parsing for C1
+
+`tests/test_press.py` (Phase P)
+- Guardian fetch with mocked API; paragraphs cached in memory
+- Secrets absent -> "press side unavailable"
 
 **Manual**
 - "Compare the Washington 2026 statements on AI" -- confirm "super intelligence" and "Eight Deliverables" appear as verbatim quotes with source links
@@ -184,5 +196,5 @@ Tool calls collapse/expand. Each statement carries a green LIVE or yellow SNAPSH
 | Model returns a paraphrased quote | Verification drops it; drop_reasons reports the failure |
 | Cloud Run restart wipes sessions | max instances=1; documented in README Known limits |
 | compare_statements internal model call fails | Caught, returned as tool error JSON; harness surfaces as chat text |
-| Commitment data is stale or wrong | Hand-curated with source citations; status never says "kept" or "broken" |
-| Single source of truth for "today" | Injected at call time; tests use a fixed date |
+| Claims anchors go stale after page update | C3 cross-check catches CMS figure changes; verdict becomes not_checkable |
+| Model invents a label outside the valid set | Code validates label; invalid rows dropped and counted in drop_reasons |

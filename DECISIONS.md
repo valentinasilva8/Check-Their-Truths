@@ -39,6 +39,7 @@ A running log of every project decision, so we can refer back to why things are 
 | D-33 | 2026-10-05 | check_claim verdicts: supported, imprecise, contradicted, not_checkable; context_note for other reasonable readings | Active |
 | D-34 | 2026-10-05 | approximately thresholds: 5% supported, 25% imprecise, >25% contradicted; denominator is claimed value | Active |
 | D-35 | 2026-10-05 | Claims reference a named post; claimed_phrase verified as substring; C3 cross-checks CMS stated vs computed change | Active |
+| D-36 | 2026-10-05 | AI naming is different_framing; contradiction requires explicit incompatible claims from both sides | Active |
 
 ---
 
@@ -212,9 +213,9 @@ A running log of every project decision, so we can refer back to why things are 
 
 ### D-25: compare_statements label set applies to every pair
 - **Date:** 2026-10-05
-- **Decision:** compare_statements uses the same five labels for every left/right pair: same, different_framing, contradiction, only_{left}, only_{right}. When comparing us vs china the labels are only_us and only_china (as in D-11). When either side is press, the labels become only_{side} (for example, only_press or only_us depending on which side is missing the topic). The left and right side names are substituted literally into the label string.
-- **Why:** A single label set works for any pair. Hardcoding only_us and only_china into the label set would require adding new labels every time a new side is introduced.
-- **Alternatives rejected:** Separate label sets per pair type (adds complexity with no benefit; the meaning is identical).
+- **Decision:** compare_statements uses the same five labels for every left/right pair: same, different_framing, contradiction, only_{left}, only_{right}. When comparing us vs china the labels are only_us and only_china (as in D-11). When either side is press, the labels become only_{side} (for example, only_press or only_us depending on which side is missing the topic). The left and right side names are substituted literally into the label string. "contradiction" requires both sides to make explicit, incompatible factual claims about the same thing -- claims that cannot both be true. Different terms for the same concept, differences in emphasis, and one side not mentioning something are never contradiction.
+- **Why:** A single label set works for any pair. Hardcoding only_us and only_china into the label set would require adding new labels every time a new side is introduced. The strict contradiction definition prevents the model from overusing it when "different_framing" or "only_{side}" is more accurate.
+- **Alternatives rejected:** Separate label sets per pair type (adds complexity with no benefit; the meaning is identical); loose contradiction definition (would label naming differences as contradictions, which misrepresents the texts).
 - **Status:** Active
 
 ### D-26: Guardian API key loaded lazily
@@ -278,6 +279,13 @@ A running log of every project decision, so we can refer back to why things are 
 - **Decision:** The approximately rule uses the claimed value as the denominator. Thresholds: difference <= 5% of claimed value is supported; <= 25% is imprecise; > 25% is contradicted. A difference of exactly 5% is supported; exactly 25% is imprecise. These thresholds are shown on the claim card in the UI.
 - **Why:** Using the claimed value as denominator measures how far off the claim is from its own stated number, which is the natural reading. Displaying the thresholds lets users see why the verdict was assigned without having to read the code.
 - **Alternatives rejected:** Official value as denominator (measures how far the official is from the claim, which is harder to interpret); hiding thresholds from the UI (users cannot verify the verdict without them).
+- **Status:** Active
+
+### D-36: AI naming is different_framing; contradiction definition
+- **Date:** 2026-10-05
+- **Decision:** The AI naming row for washington_2026_09 is labeled "different_framing", not "contradiction". The US statement says both leaders agreed to use "super intelligence"; China's English statement says nothing about terminology and uses "AI" throughout. That is omission plus different wording, not an explicit incompatible claim. "contradiction" in compare_statements is reserved for cases where both sides make explicit factual claims that cannot both be true (see D-25). check_claim's "contradicted" verdict (Medicare C3) is separate and follows D-31/D-33; that verdict is mechanically derived from numbers, not from the label set here.
+- **Why:** Calling the AI naming row a contradiction would imply China's text denies the US claim. It does not -- China's text simply uses "AI" without addressing the terminology question.
+- **Alternatives rejected:** contradiction label (misrepresents China's text as a denial); ignoring the naming difference (would hide the most newsworthy divergence in the statements).
 - **Status:** Active
 
 ### D-35: Post reference, claimed_phrase verification, and C3 cross-check
