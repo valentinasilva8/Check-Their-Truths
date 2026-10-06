@@ -124,13 +124,11 @@ Key URLs:
 
 C3 context note: "CMS also states: If the Trump Administration had not taken action to address unprecedented spending on skin substitutes, the Part B premium increase would have been about $11 more a month."
 
-## 8. Status (as of Oct 6, 2026, 12:10am ET)
+## 8. Status (as of Oct 6, 2026)
 
-Committed on `feature/two-readouts`: Phase A (sources, extraction, snapshots), Step 0 (decisions, config), Phase B (tools 1-2, weather removed), Phase C (compare_statements), Phase C follow-up (pairing rule, d4f003d), Phase M (check_claim, f96250f).
+Committed and pushed on `feature/two-readouts`: Phase A through Phase M, including Phase M fixes (c8b6caf). 81 tests pass (`uv run pytest -q`).
 
-**Uncommitted batch (needs verification before commit):** number-free anchors and markers, unified fetch helpers, `normalize_text` shared, label renames (`enrollee_count`, `payment_per_person_usd`), two-decimal money, DECISIONS D-35/D-38/D-41/D-42/D-43 updates, rigged test fixed.
-
-**OPEN ISSUE:** pytest reported 55 passed after this batch. The previous run was 76 and the batch added 5 tests, so 81 was expected. Find out why before committing (possible cause: the coding tool's /tmp disk was full). Do not delete tests to fix this.
+Next phase is Phase P (Guardian press coverage).
 
 ## 9. Next steps, in order
 
@@ -174,3 +172,4 @@ Committed on `feature/two-readouts`: Phase A (sources, extraction, snapshots), S
 - **The Medicare design is frozen.** Change it only for bugs.
 - **Copyright:** China MFA content is copyrighted (fine in a private repo; check before making it public). Guardian text never enters the repo.
 - Writing style for any user-facing copy: plain language, no em dashes.
+- Always run tests with `uv run pytest -q`. `python -m pytest` uses the system Python, cannot import litellm, and silently skips 26 tests in test_compare.py.
