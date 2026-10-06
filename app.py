@@ -6,6 +6,7 @@ import litellm
 import uvicorn
 from fastapi import FastAPI
 from fastapi.responses import FileResponse
+from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel
 
 from tools import TOOLS, run_tool
@@ -93,9 +94,12 @@ class ChatResponse(BaseModel):
     tool_calls: list[dict]
 
 
+FRONTEND = Path(__file__).parent / "frontend"
+
+
 @app.get("/")
 def index():
-    return FileResponse(Path(__file__).parent / "index.html")
+    return FileResponse(FRONTEND / "index.html")
 
 
 @app.post("/chat", response_model=ChatResponse)
@@ -121,6 +125,9 @@ def chat(request: ChatRequest):
 def clear(session_id: str | None = None):
     sessions.pop(session_id, None)
     return {"status": "ok"}
+
+
+app.mount("/static", StaticFiles(directory=FRONTEND), name="static")
 
 
 if __name__ == "__main__":

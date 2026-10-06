@@ -56,6 +56,7 @@ A running log of every project decision, so we can refer back to why things are 
 | D-50 | 2026-10-06 | Cloud Run from europe-west1 can reach the White House, CMS, and the Guardian API; the Guardian secret is ready to mount | Active |
 | D-51 | 2026-10-06 | Evidence quotes are the anchor sentence, and tool errors tell the model what to do next | Active |
 | D-52 | 2026-10-06 | Guardian secret is mounted, max instances is 1, PR 1 is open, and answers render as Markdown | Active |
+| D-53 | 2026-10-06 | Comparison results carry source metadata, claim results carry the post text, and term_check carries a terms map | Active |
 
 ---
 
@@ -421,4 +422,11 @@ A running log of every project decision, so we can refer back to why things are 
 - **Decision:** The Cloud Run service runs as 655901547612-compute@developer.gserviceaccount.com. Secret guardian-secrets is mounted at /secrets/guardian.toml, and max instances is 1. Revision gemini-web-tool-calling-git-00004-l6s is serving. Pull request 1 is open from feature/two-readouts to main and is not merged. The page renders the assistant answer as Markdown (bold and lists) and sanitizes it. The model is told to use short paragraphs and simple lists, with bold only for verdicts and key terms.
 - **Why:** The service account is the default compute account, which already has secretAccessor, so the mount did not need a new binding. Graders were seeing raw asterisks instead of bold text and lists.
 - **Alternatives rejected:** Merging the pull request from here (the owner merges); rendering Markdown without sanitizing it.
+- **Status:** Active
+
+### D-53: Source metadata, the post text, and the Chinese term flags
+- **Date:** 2026-10-06
+- **Decision:** After the comparison model call, each compare_statements result includes left_source and right_source with display_name, published, url, live, and live_changed. The prompt and the cache key stay the same. check_claim includes post.verbatim_text from config. A term_check row includes terms, a map of 人工智能 and 超级智能 to true or false. The page reads that map and does not read the reason text.
+- **Why:** The page has to show dates, live or snapshot, the post with the claimed words highlighted, and the two Chinese terms. Those facts were either missing or only written inside a sentence.
+- **Alternatives rejected:** Changing the comparison prompt to ask for dates (the dates are already in config); parsing the reason sentence in the browser.
 - **Status:** Active

@@ -178,6 +178,12 @@ def test_compare_keeps_valid_quote(monkeypatch):
     assert result["dropped"] == 0
     verified = [r for r in result["rows"] if r["label"] != "term_check"]
     assert len(verified) == 1
+    assert result["left_source"]["display_name"] == "White House fact sheet"
+    assert result["left_source"]["published"] == "2026-09-25"
+    assert result["right_source"]["display_name"] == "China Ministry of Foreign Affairs statement"
+    assert result["right_source"]["published"] == "2026-09-26"
+    for side in (result["left_source"], result["right_source"]):
+        assert set(side) == {"display_name", "published", "url", "live", "live_changed"}
 
 
 # ---------------------------------------------------------------------------
@@ -339,6 +345,11 @@ def test_compare_press_keeps_span_and_citation_fields(monkeypatch):
     assert row["right_published"] == "2026-01-01T00:00:00Z"
     assert row["attributed_to"] == "Ada Example"
     assert row["left_quote"] is None
+    assert result["right_source"]["display_name"] == "The Guardian"
+    assert result["right_source"]["url"] == "https://example.test/river"
+    assert result["right_source"]["published"] == "2026-01-01T00:00:00Z"
+    assert result["right_source"]["live"] is True
+    assert result["left_source"]["display_name"] == "White House fact sheet"
 
 
 def test_compare_press_drops_span_over_40_words(monkeypatch):
@@ -603,6 +614,7 @@ def test_chinese_term_check_ai_topic(monkeypatch):
     assert len(term_rows) == 1
     assert "人工智能" in term_rows[0]["reason"]
     assert "超级智能" in term_rows[0]["reason"]
+    assert term_rows[0]["terms"] == {"人工智能": True, "超级智能": False}
 
 
 def test_chinese_term_check_artificial_intelligence_topic(monkeypatch):

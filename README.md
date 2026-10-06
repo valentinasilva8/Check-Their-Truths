@@ -47,13 +47,14 @@ A quote is shown only when it really appears in the source. Claim verdicts use f
 
 This project is tested in two ways.
 
-**Automated code tests.** `uv run pytest -q` runs 115 tests. None of them call the AI. All 115 passed. Each area, in one line:
+**Automated code tests.** `uv run pytest -q` runs 116 tests. None of them call the AI. All 116 passed. Each area, in one line:
 
 - Quote verification: a quote is kept only when it really appears in the source, and a press quote is shown with the source's own punctuation.
 - Medicare math and verdict rules: the three claims come out supported, imprecise, or contradicted from the official numbers, including the boundary cases.
 - Fetching and snapshot fallback: a live page is used when it is valid, and a saved copy is used when the live page fails or no longer contains the sentence we need.
 - Guardian handling: the two chosen articles are fetched, numbered, and kept in memory; a saved citation file stores a hash of each quote, not the quote itself.
 - Error cases: a wrong case type, a missing key, or a failed fetch returns a clear error instead of crashing.
+- The home page: it loads, and its stylesheet and script load, without calling the model.
 
 **AI behavior checks.** A separate script asks the real model to compare the statements, then checks each answer against an answer we decided in advance. The model's wording can change from run to run even when the question is the same, so each check was run 3 times on October 6, 2026. A check that failed stays in the table.
 
