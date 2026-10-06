@@ -30,19 +30,20 @@ No new packages needed beyond the starter deps.
 ```
 Paragraph      index: int, text: str
 
-Statement      meeting_id: str, side: "us"|"china", source_name: str,
-               url: str, retrieved_at: str (ISO-8601), live: bool,
-               language: str, paragraphs: list[Paragraph]
+Statement      case_id: str, side: str ("us", "china", or "press"),
+               source_name: str, url: str, retrieved_at: str (ISO-8601),
+               live: bool, live_changed: bool (True when a live 200 returned
+               but the marker was absent; snapshot used instead),
+               live_changed_note: str|None, language: str,
+               paragraphs: list[Paragraph]
 
-ComparisonRow  label: "same"|"different_framing"|"contradiction"|"only_us"|"only_china",
+ComparisonRow  label: "same"|"different_framing"|"contradiction"|
+                      "only_{left}"|"only_{right}",
                topic: str, reason: str (one sentence from the model),
-               us_quote: str|None, us_url: str|None,
-               china_quote: str|None, china_url: str|None
-
-Commitment     description: str, side: "us"|"china"|"joint",
-               exact_quote: str, original_deadline_wording: str|None,
-               interpreted_deadline: str|None (ISO date),
-               status: str, source_url: str
+               left_quote: str|None, left_url: str|None,
+               right_quote: str|None, right_url: str|None,
+               attributed_to: str|None (press rows: who the press says
+               made the claim; null for the outlet's own reporting)
 ```
 
 Tools serialize these to JSON strings (not dicts) before returning.
@@ -51,27 +52,31 @@ Tools serialize these to JSON strings (not dicts) before returning.
 
 ## 3. Tools
 
-**list_meetings** -- no arguments
-- Description for model: "List every meeting this agent supports, with IDs, names, and dates. Call this first when the user has not specified a meeting."
-- Returns: `[{meeting_id, name, dates}]`
-- Errors: "Config file not found at config/sources.toml." / "No meetings configured."
+**list_cases** -- no arguments
+- Description for model: "List every case this agent supports, with IDs, types (meeting or claim_check), names, and dates. Call this first when the user has not specified a case."
+- Returns: `[{case_id, type, name, dates}]`
+- Errors: "Config file not found at config/sources.toml." / "No cases configured."
 
-**get_official_statement(meeting_id: str, side: str)**
-- Description: "Fetch the official statement for one side ('us' or 'china'). For China, tries MFA English, then gov.cn mirror, then Embassy mirror in priority order. Falls back to a saved snapshot if all live fetches fail, and says so. Returns paragraphs, source URL, retrieval time, and live/snapshot flag."
+**get_official_source(case_id: str, source: str)**
+- Description: "Fetch the official statement for one side ('us' or 'china') of a meeting case. For China, tries MFA English, then gov.cn mirror, then Embassy mirror in priority order. Falls back to a saved snapshot if all live fetches fail, and says so. If a live 200 response returns but the marker is absent, falls back to the snapshot and sets live_changed=True."
 - Returns: serialized Statement
-- Errors: "Meeting '{id}' not found. Call list_meetings to see supported meetings." / "side must be 'us' or 'china', got '{x}'." / "All live sources failed for {side}/{meeting_id} and no snapshot exists. Try again later."
-- Snapshot path: `data/snapshots/{meeting_id}_{source_name}.json`
+- Errors: "Case '{id}' not found. Call list_cases to see supported cases." / "source must be 'us' or 'china', got '{x}'." / "get_official_source requires a meeting case." / "All live sources failed for {side}/{case_id} and no snapshot exists. Try again later."
+- Snapshot path: `data/snapshots/{case_id}_{source_name}.json`
 - Only fetches URLs listed in config/sources.toml -- never URLs from user input or model output.
 
-**compare_statements(meeting_id: str, topic: str = "")**
-- Description: "Compare the US and China official statements for a meeting topic by topic. If topic is given (e.g. 'AI', 'trade'), only that topic is analyzed. Returns rows labeled 'same' (both sides say the same thing), 'different_framing' (same event, different emphasis), 'contradiction' (claims that cannot both be true), 'only_us', or 'only_china'. Each row includes a one-sentence reason and verbatim quotes with source links. For the AI topic, also reports whether the Chinese original contains the terms 人工智能 and/or 超级智能. Unverifiable rows are reported to the user, not silently dropped. Only fetches URLs listed in config/sources.toml -- never URLs from user input."
-- Returns: `{meeting_id, topic, rows: [ComparisonRow], dropped: int, drop_reasons: [str]}`
-- Errors: "Could not load statements for '{meeting_id}': {reason}." / "No verifiable rows found for topic '{topic}'."
+**get_press_coverage(case_id: str)** -- added in Phase P
+- Description: "Fetch Guardian press coverage for a meeting case. Returns headline, byline, url, published, and paragraphs for each curated article. Returns error if the API key is unavailable."
+- Meeting cases only. Paragraphs cached in memory; never written to disk.
 
-**track_commitments(meeting_id: str)**
-- Description: "List commitments made at a meeting with honest statuses based on today's date: 'upcoming' (deadline in the future), 'deadline passed, not verified' (deadline has passed but fulfillment is unknown), or 'no date given'. Never claims a promise was kept or broken without evidence."
-- Returns: `{meeting_id, as_of: today, commitments: [Commitment]}`
-- Errors: "No commitment data found for '{meeting_id}'." / "Meeting '{meeting_id}' not found."
+**compare_statements(case_id: str, topic: str = "", left: str = "us", right: str = "china")**
+- Description: "Compare two sides' coverage of a case topic by topic. left and right can be 'us', 'china', or 'press'. Returns rows labeled 'same', 'different_framing', 'contradiction', 'only_{left}', or 'only_{right}'. Each row includes a reason, verified quotes, and attributed_to (press rows only). For the AI topic on washington_2026_09 also reports 人工智能 / 超级智能 presence. Unverifiable rows are reported, not dropped silently. Meeting cases only."
+- Returns: `{case_id, topic, left, right, rows: [ComparisonRow], dropped: int, drop_reasons: [str]}`
+- Errors: "compare_statements requires a meeting case." / "Could not load statements for '{case_id}': {reason}." / "No verifiable rows found for topic '{topic}'."
+
+**check_claim(case_id: str, claim_id: str)** -- added in Phase M
+- Description: "Fact-check a specific claim from a named post against official source data. Verifies the claimed_phrase is a substring of the post text. Applies the claim_type rule (at_least, approximately, direction) using Python Decimal arithmetic. Returns verdict (supported, imprecise, contradicted, not_checkable), numbers dict, arithmetic string, and optional context_note. Claim_check cases only."
+- Returns: `{case_id, claim_id, verdict, numbers, arithmetic, context_note, source_url, live, live_changed}`
+- Errors: "check_claim requires a claim_check case." / "Claim '{id}' not found." / "claimed_phrase not found in post text."
 
 ---
 

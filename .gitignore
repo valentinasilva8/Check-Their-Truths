@@ -7,6 +7,7 @@ __pycache__/
 
 # Local secrets and config. Commit .env.example instead, never .env.
 .env
+config/secrets.toml
 
 # macOS
 .DS_Store
