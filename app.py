@@ -6,6 +6,7 @@ import litellm
 import uvicorn
 from fastapi import FastAPI
 from fastapi.responses import FileResponse
+from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel
 
 from tools import TOOLS, run_tool
@@ -31,7 +32,11 @@ SYSTEM_PROMPT = (
     "\"What did The Guardian report that the official statements left out?\", or "
     "\"Did Trump accurately describe the Medicare payments and premiums?\"\n\n"
     "Format answers with short paragraphs and simple lists; use bold only for "
-    "verdicts and key terms."
+    "verdicts and key terms.\n\n"
+    "The page shows the evidence (quotes, labels, numbers, and verdicts) next to "
+    "your answer. Keep your answer to a short summary: 2-4 sentences or up to 5 "
+    "short bullets. Do not repeat every quote or number; point to the most "
+    "important findings."
 )
 MAX_TOOL_ROUNDS = 8
 
@@ -93,9 +98,12 @@ class ChatResponse(BaseModel):
     tool_calls: list[dict]
 
 
+FRONTEND = Path(__file__).parent / "frontend"
+
+
 @app.get("/")
 def index():
-    return FileResponse(Path(__file__).parent / "index.html")
+    return FileResponse(FRONTEND / "index.html")
 
 
 @app.post("/chat", response_model=ChatResponse)
@@ -121,6 +129,9 @@ def chat(request: ChatRequest):
 def clear(session_id: str | None = None):
     sessions.pop(session_id, None)
     return {"status": "ok"}
+
+
+app.mount("/static", StaticFiles(directory=FRONTEND), name="static")
 
 
 if __name__ == "__main__":

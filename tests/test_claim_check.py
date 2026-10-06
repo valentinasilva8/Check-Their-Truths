@@ -187,6 +187,7 @@ def test_c1_supported():
         "20 million enrollees pay for their Medicare Part B premiums."
     )
     assert result["context_note"] is None
+    assert result["claimed_phrase"] in result["post"]["verbatim_text"]
 
 
 # ---------------------------------------------------------------------------

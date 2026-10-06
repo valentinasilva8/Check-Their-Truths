@@ -1,0 +1,42 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Two Readouts</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500&family=Inter:wght@400;500;600&family=Newsreader:opsz,wght@6..72,400;6..72,600&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="/static/styles.css?v=6">
+</head>
+<body>
+  <header class="site-header">
+    <h1>Two Readouts</h1>
+    <p>What they said, side by side, and what the record shows.</p>
+  </header>
+  <main>
+    <section id="chat" aria-label="Conversation">
+      <div id="messages">
+        <div id="empty">
+          <p>Two Readouts compares the official US and China statements about the September 2026 Trump-Xi meeting, topic by topic, and checks three Medicare claims against White House and CMS numbers.</p>
+          <div class="samples" id="samples"></div>
+        </div>
+      </div>
+      <form id="composer">
+        <textarea id="question" rows="2" placeholder="Ask about the meeting or the Medicare claims"></textarea>
+        <button type="submit" id="send">Send</button>
+      </form>
+    </section>
+    <aside id="evidence" aria-label="Evidence">
+      <div class="panel-head">
+        <p class="panel-kicker" id="panel-kicker">Evidence</p>
+        <p class="panel-question" id="panel-question">Ask a question to see the sources behind the answer.</p>
+      </div>
+      <div id="panel-body"></div>
+    </aside>
+  </main>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/marked/15.0.7/marked.min.js"></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/dompurify/3.2.4/purify.min.js"></script>
+  <script src="/static/app.js?v=6"></script>
+</body>
+</html>

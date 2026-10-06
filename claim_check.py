@@ -169,6 +169,7 @@ def _post_info(post: dict) -> dict:
         "is_excerpt": post.get("is_excerpt", False),
         "text_source": post.get("text_source"),
         "original_url": post.get("original_url"),
+        "verbatim_text": post.get("verbatim_text"),
     }
 
 

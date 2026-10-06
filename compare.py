@@ -86,6 +86,10 @@ def _chinese_term_check(case_id: str) -> dict | None:
         "left_url": None,
         "right_url": None,
         "attributed_to": None,
+        "terms": {
+            "人工智能": has_rengong,
+            "超级智能": has_chaoji,
+        },
     }
 
 
@@ -254,20 +258,45 @@ def _official_numbered(result: dict) -> list[dict]:
     ]
 
 
-def _load_numbered_side(config: dict, case_id: str, side: str) -> tuple[dict | None, list[dict] | None]:
-    """Return (error_result, numbered_paragraphs)."""
+def _source_meta_official(loaded: dict) -> dict:
+    return {
+        "display_name": loaded.get("display_name"),
+        "published": loaded.get("published"),
+        "url": loaded.get("url"),
+        "live": loaded.get("live"),
+        "live_changed": bool(loaded.get("live_changed")),
+    }
+
+
+def _source_meta_press(loaded: dict) -> dict:
+    articles = loaded.get("articles") or []
+    published = [article.get("published") for article in articles if article.get("published")]
+    unique_dates = list(dict.fromkeys(published))
+    return {
+        "display_name": "The Guardian",
+        "published": unique_dates[0] if len(unique_dates) == 1 else None,
+        "url": articles[0].get("url") if len(articles) == 1 else None,
+        "live": True,
+        "live_changed": False,
+    }
+
+
+def _load_numbered_side(
+    config: dict, case_id: str, side: str
+) -> tuple[dict | None, list[dict] | None, dict | None]:
+    """Return (error_result, numbered_paragraphs, source_meta)."""
     if side == "press":
         loaded = get_press_coverage(config, case_id)
         if "error" in loaded:
             if loaded["error"] == UNAVAILABLE:
-                return {"error": UNAVAILABLE}, None
-            return loaded, None
+                return {"error": UNAVAILABLE}, None, None
+            return loaded, None, None
         paragraphs = []
         for paragraph in flatten_paragraphs(loaded):
             paragraphs.append({**paragraph, "is_press": True})
         if not paragraphs:
-            return {"error": UNAVAILABLE}, None
-        return None, paragraphs
+            return {"error": UNAVAILABLE}, None, None
+        return None, paragraphs, _source_meta_press(loaded)
 
     loaded = get_official_source(config, case_id, side)
     if "error" in loaded:
@@ -276,8 +305,8 @@ def _load_numbered_side(config: dict, case_id: str, side: str) -> tuple[dict | N
                 f"Could not load {side} statement: {loaded['error']} "
                 "Do not invent that side's text."
             )
-        }, None
-    return None, _official_numbered(loaded)
+        }, None, None
+    return None, _official_numbered(loaded), _source_meta_official(loaded)
 
 
 def _strip_json_fence(raw: str) -> str:
@@ -348,10 +377,10 @@ def _compare_press(
     right: str,
 ) -> dict:
     """Press comparison. Numbered paragraphs, prompt version 7. Does not write citations."""
-    err, left_paras = _load_numbered_side(config, case_id, left)
+    err, left_paras, left_meta = _load_numbered_side(config, case_id, left)
     if err:
         return err
-    err, right_paras = _load_numbered_side(config, case_id, right)
+    err, right_paras, right_meta = _load_numbered_side(config, case_id, right)
     if err:
         return err
 
@@ -529,6 +558,8 @@ def _compare_press(
         "dropped": dropped_count,
         "drop_reasons": drop_reasons,
         "cap_hit": cap_hit,
+        "left_source": left_meta,
+        "right_source": right_meta,
     }
     _cache[cache_key] = (_now(), result)
     return result
@@ -722,6 +753,8 @@ def compare_statements(
         "dropped": dropped_count,
         "drop_reasons": drop_reasons,
         "cap_hit": cap_hit,
+        "left_source": _source_meta_official(left_result),
+        "right_source": _source_meta_official(right_result),
     }
     _cache[cache_key] = result
     return result
