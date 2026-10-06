@@ -55,6 +55,7 @@ A running log of every project decision, so we can refer back to why things are 
 | D-49 | 2026-10-06 | Xinhua source_note is written by code, not by the model | Active |
 | D-50 | 2026-10-06 | Cloud Run from europe-west1 can reach the White House, CMS, and the Guardian API; the Guardian secret is ready to mount | Active |
 | D-51 | 2026-10-06 | Evidence quotes are the anchor sentence, and tool errors tell the model what to do next | Active |
+| D-52 | 2026-10-06 | Guardian secret is mounted, max instances is 1, PR 1 is open, and answers render as Markdown | Active |
 
 ---
 
@@ -413,4 +414,11 @@ A running log of every project decision, so we can refer back to why things are 
 - **Decision:** check_claim evidence_quote is the sentence that contains the anchor, not the whole paragraph. C3's arithmetic string shows the monthly change and then the yearly change as 17.90 x 12. Every error a tool returns tells the model the next step, such as calling list_cases or using the other tool.
 - **Why:** A real Medicare answer quoted the deductible sentence next to the premium sentence. A tool error that only says what failed does not tell the model how to recover.
 - **Alternatives rejected:** Leaving the full paragraph (it mixes in numbers the claim does not use); keeping short errors such as "press side unavailable" with no next step.
+- **Status:** Active
+
+### D-52: Secret mount, instance cap, open pull request, and Markdown answers
+- **Date:** 2026-10-06
+- **Decision:** The Cloud Run service runs as 655901547612-compute@developer.gserviceaccount.com. Secret guardian-secrets is mounted at /secrets/guardian.toml, and max instances is 1. Revision gemini-web-tool-calling-git-00004-l6s is serving. Pull request 1 is open from feature/two-readouts to main and is not merged. The page renders the assistant answer as Markdown (bold and lists) and sanitizes it. The model is told to use short paragraphs and simple lists, with bold only for verdicts and key terms.
+- **Why:** The service account is the default compute account, which already has secretAccessor, so the mount did not need a new binding. Graders were seeing raw asterisks instead of bold text and lists.
+- **Alternatives rejected:** Merging the pull request from here (the owner merges); rendering Markdown without sanitizing it.
 - **Status:** Active

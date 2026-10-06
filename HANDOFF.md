@@ -128,25 +128,21 @@ C3 context note: "CMS also states: If the Trump Administration had not taken act
 
 ## 8. Status (as of Oct 6, 2026)
 
-Committed and pushed on `feature/two-readouts`: Phase A through Phase M, including Phase M fixes (c8b6caf). Phase P (Guardian press side) is done.
+Committed and pushed on `feature/two-readouts`: Phase A through Phase M, Phase P, and the assignment alignment (64527b1). The page explains what the agent is, offers the three sample questions, and renders assistant answers as Markdown (bold and lists). README and `submission.json` are in place.
 
-Next is Phase E (frontend).
+The service account is `655901547612-compute@developer.gserviceaccount.com` (the default compute account). Secret `guardian-secrets` is mounted at `/secrets/guardian.toml`. Max instances is 1. Revision `gemini-web-tool-calling-git-00004-l6s` is serving. Pull request 1 is open and not merged: https://github.com/valentinasilva8/gemini-web-tool-calling/pull/1
 
 ## 9. Next steps, in order
 
-1. **Phase E (frontend, built in v0):**
+1. **Owner merges PR 1.** After the auto-deploy, confirm the new revision still has the secret mounted. Test the live URL with a second Columbia account.
+2. **Phase E remainder (optional comparison cards, built in v0):**
    - Push the branch first. Point v0 at `feature/two-readouts`, never `main`. Do not run v0 and another coding tool on the branch at the same time.
    - Output must be plain HTML/CSS/JS served by FastAPI (one `index.html`), or static files FastAPI can serve. Not a separate Next.js deploy.
    - Everything renders from `tool_calls` in the `/chat` JSON, never from model prose. Give v0 real sample JSON (a compare_statements result with a term_check row, and a check_claim result with a context note).
    - Comparison view: side selector (US vs China, US vs Press, China vs Press), LIVE/SNAPSHOT badges, "N rows hidden because quotes could not be verified", term_check row, source links.
    - Claim cards: verdict badge (supported / imprecise / contradicted / not_checkable), rule and thresholds shown, numbers, arithmetic string, evidence quote, "Checked against" source line, separate Context box (only when context_note is not null), "excerpt" label on the post, "original link pending" while `original_url` is TODO.
-2. **Phase F:** README with 3 grader queries (one US vs China, one press, one Medicare), known limits (in-memory sessions, max-instances 1, hard-coded post excerpt, original link pending, Guardian articles predate official statements, Guardian key is non-commercial tier), next steps (discovery tool for new statements, automated claim extraction). Do NOT mention soybeans. `submission.json` with deploy_url and authors (confirm whether the assignment wants UNI or email).
-3. **Phase G (deploy):**
-   Cloud Run reachability from europe-west1 was confirmed on Oct 6, 2026: the White House, CMS, and the Guardian API all returned 200, and the secret file mount works (D-50). Secret `guardian-secrets` version 1 already exists. The default compute service account `655901547612-compute@developer.gserviceaccount.com` already has `secretAccessor`. First confirm the service runs as that account. Then only:
-   ```
-   gcloud run services update gemini-web-tool-calling-git --project=valentinas-project-ieor4570 --region=europe-west1 --update-secrets=/secrets/guardian.toml=guardian-secrets:latest --max-instances=1
-   ```
-   Mount at `/secrets/guardian.toml`, NOT inside `/app/config/` (a secret volume would hide sources.toml and claims.toml). Open a PR to main; the owner merges. After the auto-deploy, confirm the new revision still has the secret mounted. Test the live URL with a second Columbia account.
+3. **Phase F remainder:** known limits and the three grader queries are in the README. `submission.json` uses `vt2450`. Still open: a short "why I built this" paragraph (the README has a placeholder), and whether the assignment wants a UNI or an email in `authors`.
+4. **Phase G remainder:** the secret is mounted and max instances is 1 (D-52). After the owner merges, confirm the new revision still has `/secrets/guardian.toml` mounted. Do not mount the secret inside `/app/config/`.
 
 ## 10. Owner's open to-dos
 
