@@ -179,7 +179,7 @@ function fillQuote(cell, result, row, which) {
   const published = row[`${which}_published`] || (result[`${which}_source`] || {}).published;
 
   if (side === "press" && headline) cell.appendChild(el("p", "headline", headline));
-  if (side === "press" && byline) cell.appendChild(el("p", "byline", byline));
+  if (side === "press" && byline) cell.appendChild(el("p", "byline", `By ${byline}`));
 
   if (quote) cell.appendChild(el("blockquote", "words", quote));
   else cell.appendChild(el("p", "missing", "Not mentioned in this source"));
@@ -284,6 +284,25 @@ function renderComparison(parent, result, args) {
   parent.appendChild(block);
 }
 
+function quotedByLine(post) {
+  const urls = Array.isArray(post.quoted_by) ? post.quoted_by : [];
+  const outlets = [
+    { name: "Axios", host: "axios.com" },
+    { name: "Fox Business", host: "foxbusiness.com" },
+    { name: "NewsNation", host: "newsnationnow.com" },
+  ];
+  const line = el("p", "pending-link");
+  line.appendChild(document.createTextNode("As quoted by "));
+  outlets.forEach((outlet, index) => {
+    if (index === outlets.length - 1) line.appendChild(document.createTextNode(", and "));
+    else if (index > 0) line.appendChild(document.createTextNode(", "));
+    const href = urls.find((url) => typeof url === "string" && url.includes(outlet.host));
+    if (href) appendLink(line, href, outlet.name);
+    else line.appendChild(document.createTextNode(outlet.name));
+  });
+  return line;
+}
+
 function renderClaim(parent, result) {
   const block = el("section", "evidence-block");
   const top = el("div", "claim-top");
@@ -297,7 +316,7 @@ function renderClaim(parent, result) {
   const who = [post.speaker, post.platform, formatDate(post.date)].filter(Boolean).join(", ");
   if (who) heading.appendChild(el("p", "meta-line", who));
   if (post.is_excerpt) heading.appendChild(el("p", "meta-line", "excerpt"));
-  if (post.original_url === "TODO") heading.appendChild(el("p", "pending-link", "Original link pending"));
+  if (post.original_url === "TODO") heading.appendChild(quotedByLine(post));
   top.appendChild(heading);
   const verdict = result.verdict || "not_checkable";
   top.appendChild(el("span", `stamp ${verdict}`, VERDICT_TEXT[verdict] || verdict));
@@ -354,7 +373,7 @@ function renderPress(parent, result) {
   (result.articles || []).forEach((article) => {
     const piece = el("article", "article");
     if (article.headline) piece.appendChild(el("p", "headline", article.headline));
-    if (article.byline) piece.appendChild(el("p", "byline", article.byline));
+    if (article.byline) piece.appendChild(el("p", "byline", `By ${article.byline}`));
     const meta = el("p", "meta-line");
     if (article.published) meta.appendChild(document.createTextNode(formatDate(article.published)));
     if (article.url) {

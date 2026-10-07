@@ -1,6 +1,6 @@
 # HANDOFF: Check Their Truths (Agentic AI class project)
 
-Read this file first. Then read CLAUDE.md, DESIGN.md, DECISIONS.md (D-01 to D-43), and EVAL.md in that order. DECISIONS.md is the source of truth when anything here disagrees with older text.
+Read this file first. Then read CLAUDE.md, docs/DESIGN.md, docs/DECISIONS.md (D-01 to D-43), and docs/EVAL.md in that order. docs/DECISIONS.md is the source of truth when anything here disagrees with older text.
 
 ---
 
@@ -151,8 +151,8 @@ The service account is `655901547612-compute@developer.gserviceaccount.com` (the
 - **Never weaken a test to make it pass.** Watch for `==` changed to `>=`, exact values replaced by "not empty", tests deleted or skipped, comments that disagree with assertions, or fake fixtures with planted values. If a test and the spec disagree, report it.
 - **Run the smoke test at the end of every phase.** Unit tests do not prove the agent calls the tools.
 - **Check summaries against diffs.** Previous tools reported work as matching the plan when it did not.
-- **Log every design decision in DECISIONS.md**, each number once, in order.
-- **Docs drift:** after context compaction, coding tools reread the docs. Keep CLAUDE.md, DESIGN.md, and EVAL.md current or stale names come back.
+- **Log every design decision in docs/DECISIONS.md**, each number once, in order.
+- **Docs drift:** after context compaction, coding tools reread the docs. Keep CLAUDE.md, docs/DESIGN.md, and docs/EVAL.md current or stale names come back.
 - **The Medicare design is frozen.** Change it only for bugs.
 - **Copyright:** China MFA content is copyrighted (fine in a private repo; check before making it public). Guardian text never enters the repo.
 - Writing style for any user-facing copy: plain language, no em dashes.
