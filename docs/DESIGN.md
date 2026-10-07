@@ -22,7 +22,7 @@ tests/
   test_compare.py       compare_statements: quote verification, label validation, cache
   test_claim_check.py   check_claim: verdict rules, Decimal arithmetic (Phase M)
   test_press.py         get_press_coverage: Guardian fetch, secrets, cache (Phase P)
-EVAL.md                 expected rows checklist for the September 2026 meeting
+docs/EVAL.md            expected rows checklist for the September 2026 meeting
 ```
 
 No new packages needed beyond the starter deps.

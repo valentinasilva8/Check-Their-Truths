@@ -43,7 +43,7 @@ A quote is shown only when it really appears in the source. Claim verdicts use f
 
 ## Testing and reliability
 
-The full pass-rate table with tested prompts and agent behaviors is in EVAL.md.
+The full pass-rate table with tested prompts and agent behaviors is in docs/EVAL.md.
 
 ## Known limits
 

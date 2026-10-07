@@ -25,7 +25,7 @@ Python, FastAPI, LiteLLM, Gemini via Vertex AI. Google Cloud Run service gemini-
 5. Before any change touching more than one file, show me a plan and wait for my OK.
 6. Every new function gets a test. Run the full test suite before saying a step is done.
 7. Never use em dashes in UI text, README, or comments.
-8. When I approve a decision (design, scope, tool behavior, data, deployment), add or update an entry in DECISIONS.md in the same commit as the change it describes.
+8. When I approve a decision (design, scope, tool behavior, data, deployment), add or update an entry in docs/DECISIONS.md in the same commit as the change it describes.
 
 ## Assignment requirements (never break these)
 - /chat returns `response`, `session_id`, and `tool_calls`; each tool call includes name, arguments, and result.
