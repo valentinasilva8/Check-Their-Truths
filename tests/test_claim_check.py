@@ -188,6 +188,12 @@ def test_c1_supported():
     )
     assert result["context_note"] is None
     assert result["claimed_phrase"] in result["post"]["verbatim_text"]
+    assert result["post"]["original_url"] == "TODO"
+    assert result["post"]["quoted_by"] == [
+        "https://www.axios.com/2026/10/03/trump-medicare-100-seniors-improvement-fund",
+        "https://www.foxbusiness.com/politics/trump-announces-90-checks-more-than-20m-seniors-help-combat-medicare-costs",
+        "https://www.newsnationnow.com/business/your-money/president-trump-check-seniors-medicare/",
+    ]
 
 
 # ---------------------------------------------------------------------------

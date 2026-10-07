@@ -170,6 +170,7 @@ def _post_info(post: dict) -> dict:
         "text_source": post.get("text_source"),
         "original_url": post.get("original_url"),
         "verbatim_text": post.get("verbatim_text"),
+        "quoted_by": list(post.get("quoted_by") or []),
     }
 
 

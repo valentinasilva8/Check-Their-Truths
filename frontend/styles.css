@@ -343,7 +343,7 @@ main {
   font-size: 0.92rem;
 }
 
-.cite a, .checked a { color: inherit; }
+.cite a, .checked a, .pending-link a { color: inherit; text-decoration: underline; }
 
 .label-cell { padding-top: 10px; }
 
