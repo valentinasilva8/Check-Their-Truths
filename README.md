@@ -32,6 +32,11 @@ These are the three questions on the empty state. For each one, the agent decide
 
    **Correct answer:** includes Trump's offer to sell US weapons to China and labels it as press-only. It says the article attributes that offer to David Perdue, the US ambassador to China. If the user then says to compare that with what China said, the answer stays on that meeting and compares China with The Guardian.
 
+## More to try
+
+- "show me what china's official statement actually says" (calls `get_official_source`)
+- "show me the guardian articles about the meeting" (calls `get_press_coverage`)
+
 ## Why I built this
 
 I started this project because I wanted an easier way to keep up with AI developments between the US and China by looking at both sides before forming an opinion.
@@ -51,6 +56,8 @@ Five tools. Two of them use external data. Two of them are original. One reads t
 - `get_press_coverage` uses external data. It fetches articles from The Guardian.
 - `compare_statements` is original. It compares any two sides of the meeting (US, China, or The Guardian) topic by topic, and labels each point as the same, framed differently, a contradiction, or mentioned by only one side. The AI picks the quotes, but code checks every quote word for word against its source and hides any it can't verify.
 - `check_claim` is original. It fact-checks a claim from Trump's Medicare post against official numbers. Code finds the right sentence in the official source, pulls out the numbers, does the math, and applies a fixed rule (for example, within 5% counts as supported), so the verdict is the same every time. The AI only explains the result.
+
+`compare_statements` and `check_claim` also fetch the live sources themselves, so every sample prompt uses external data. `get_official_source` and `get_press_coverage` are for when you want to read a source directly.
 
 ## Testing and reliability
 
