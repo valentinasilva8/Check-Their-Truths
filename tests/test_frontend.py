@@ -19,3 +19,13 @@ def test_home_page_and_assets_load():
     assert "Newsreader" in css.text
     assert script.status_code == 200
     assert "compare_statements" in script.text
+
+
+def test_arithmetic_is_shown_exactly_and_only_counts_get_commas():
+    client = TestClient(app)
+    script = client.get("/static/app.js").text
+    assert "commaIntegers" not in script
+    assert r"\d{4,}" not in script
+    assert 'el("p", "arithmetic", result.arithmetic)' in script
+    assert "function formatCount" in script
+    assert "/^\\d{5,}$/" in script

@@ -24,6 +24,7 @@ SYSTEM_PROMPT = (
     "Use get_press_coverage only when the user wants the articles themselves. "
     "Use get_official_source only when the user wants the statement text itself.\n"
     "For Medicare, call check_claim once for C1, once for C2, and once for C3. "
+    "Call check_claim at most once per claim in an answer. "
     "Do not do the arithmetic yourself.\n"
     "Call list_cases only when you do not know the case id.\n\n"
     "When the user asks whether something happened or was said (for example "

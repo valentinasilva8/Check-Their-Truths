@@ -74,8 +74,10 @@ function formatDate(value) {
   });
 }
 
-function commaIntegers(value) {
-  return String(value).replace(/\d{4,}/g, (digits) => Number(digits).toLocaleString("en-US"));
+function formatCount(value) {
+  const text = String(value).trim();
+  if (!/^\d{5,}$/.test(text)) return text;
+  return Number(text).toLocaleString("en-US");
 }
 
 function parseResult(call) {
@@ -329,7 +331,12 @@ function renderClaim(parent, result) {
     block.appendChild(excerpt);
   }
   if (result.evidence_quote) block.appendChild(el("blockquote", "record", result.evidence_quote));
-  if (result.arithmetic) block.appendChild(el("p", "arithmetic", commaIntegers(result.arithmetic)));
+  if (result.arithmetic) block.appendChild(el("p", "arithmetic", result.arithmetic));
+  if (result.numbers) {
+    Object.entries(result.numbers).forEach(([key, value]) => {
+      result.numbers[key] = formatCount(value);
+    });
+  }
   if (result.reason) block.appendChild(el("p", "rule", result.reason));
   if (result.checked_against) {
     const line = el("p", "checked");
